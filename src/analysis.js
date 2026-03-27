@@ -24,6 +24,10 @@ const STOP_WORDS = new Set([
   "your"
 ]);
 
+const analysisLog = (event, payload) => {
+  console.log(`[AI Copilot Analysis] ${event}`, payload ?? "");
+};
+
 const normalize = (text) =>
   text
     .toLowerCase()
@@ -41,10 +45,18 @@ export const extractKeywords = (text, limit = 18) => {
     counts.set(token, (counts.get(token) || 0) + 1);
   }
 
-  return [...counts.entries()]
+  const keywords = [...counts.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, limit)
     .map(([token]) => token);
+
+  analysisLog("extract-keywords", {
+    textLength: text.length,
+    limit,
+    keywordCount: keywords.length
+  });
+
+  return keywords;
 };
 
 export const extractPhrases = (text) => {
@@ -53,9 +65,16 @@ export const extractPhrases = (text) => {
     .map((line) => line.replace(/^[\s•*-]+/, "").trim())
     .filter(Boolean);
 
-  return lines
+  const phrases = lines
     .filter((line) => /experience|skill|build|lead|manage|design|develop|stakeholder|analytics|strategy|product|resume|cover|customer/i.test(line))
     .slice(0, 12);
+
+  analysisLog("extract-phrases", {
+    textLength: text.length,
+    phraseCount: phrases.length
+  });
+
+  return phrases;
 };
 
 export const inferJobMeta = (text, url) => {
@@ -71,10 +90,18 @@ export const inferJobMeta = (text, url) => {
     }
   }
 
-  return {
+  const meta = {
     title: titleMatch?.[1]?.trim() || "Target Role",
     company: companyMatch?.[1]?.trim() || (domain ? domain.split(".")[0] : "Prospective Employer")
   };
+
+  analysisLog("infer-job-meta", {
+    url,
+    title: meta.title,
+    company: meta.company
+  });
+
+  return meta;
 };
 
 export const analyzeMatch = ({ jobDescription, resumeText, experienceBank }) => {
@@ -94,7 +121,7 @@ export const analyzeMatch = ({ jobDescription, resumeText, experienceBank }) => 
   });
   const score = Math.max(32, Math.min(96, Math.round((matchedKeywords.length / Math.max(jobKeywords.length, 1)) * 100)));
 
-  return {
+  const result = {
     score,
     fitRating: score > 84 ? "Strong fit" : score > 68 ? "Promising fit" : score > 52 ? "Partial fit" : "Needs evidence",
     matchedKeywords,
@@ -104,4 +131,14 @@ export const analyzeMatch = ({ jobDescription, resumeText, experienceBank }) => 
     jobKeywords,
     resumeKeywords
   };
+
+  analysisLog("analyze-match", {
+    score: result.score,
+    fitRating: result.fitRating,
+    matchedKeywords: matchedKeywords.length,
+    missingKeywords: missingKeywords.length,
+    gapCount: gapAreas.length
+  });
+
+  return result;
 };

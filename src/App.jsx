@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { analyzeMatch, extractPhrases, inferJobMeta } from "./analysis.js";
 import {
   buildSuggestions,
@@ -27,11 +27,25 @@ Experience
 Skills
 Product marketing, messaging, analytics, stakeholder communication, content strategy, customer research`;
 
+const appLog = (event, payload) => {
+  console.log(`[AI Copilot] ${event}`, payload ?? "");
+};
+
 const ensureAnalysis = (baseState) => {
   const jobDescription = baseState.job.description.trim();
   const resumeText = baseState.resume.rawText.trim();
 
+  appLog("ensureAnalysis:start", {
+    hasJobDescription: Boolean(jobDescription),
+    hasResumeText: Boolean(resumeText),
+    experienceBankCount: baseState.experienceBank.length,
+    followUpAnswerCount: Object.keys(baseState.followUpAnswers || {}).length
+  });
+
   if (!jobDescription || !resumeText) {
+    appLog("ensureAnalysis:skipped", {
+      reason: !jobDescription ? "missing-job-description" : "missing-resume-text"
+    });
     return baseState;
   }
 
@@ -183,10 +197,22 @@ const ListOrFallback = ({ items, fallback }) => (
 export default function App() {
   const [state, setState] = useState(() => {
     const initial = loadState();
+    appLog("state:init", {
+      hasUser: Boolean(initial.user),
+      currentStep: initial.currentStep,
+      experienceBankCount: initial.experienceBank.length,
+      versionHistoryCount: initial.versionHistory.length
+    });
     return initial.user ? ensureAnalysis(initial) : initial;
   });
 
   useEffect(() => {
+    appLog("state:save", {
+      currentStep: state.currentStep,
+      hasAnalysis: Boolean(state.analysis),
+      experienceBankCount: state.experienceBank.length,
+      versionHistoryCount: state.versionHistory.length
+    });
     saveState(state);
   }, [state]);
 
@@ -195,6 +221,7 @@ export default function App() {
   };
 
   const signIn = (user) => {
+    appLog("auth:sign-in", { email: user.email, location: user.location });
     updateState((current) => ({
       ...current,
       user,
@@ -208,6 +235,13 @@ export default function App() {
     const description = `${formData.get("description") || ""}`.trim();
     const url = `${formData.get("url") || ""}`.trim();
     const meta = inferJobMeta(description, url || "https://example.com");
+
+    appLog("job:submit", {
+      url,
+      descriptionLength: description.length,
+      inferredTitle: meta.title,
+      inferredCompany: meta.company
+    });
 
     updateState((current) =>
       ensureAnalysis({
@@ -229,6 +263,10 @@ export default function App() {
     const formData = new FormData(event.currentTarget);
     const rawText = `${formData.get("resume") || ""}`.trim();
 
+    appLog("resume:submit", {
+      length: rawText.length
+    });
+
     updateState((current) =>
       ensureAnalysis({
         ...current,
@@ -246,8 +284,15 @@ export default function App() {
     const [file] = event.target.files || [];
 
     if (!file) {
+      appLog("resume:file-upload-skipped", { reason: "no-file-selected" });
       return;
     }
+
+    appLog("resume:file-upload", {
+      name: file.name,
+      size: file.size,
+      type: file.type
+    });
 
     const rawText = await file.text();
 
@@ -265,10 +310,17 @@ export default function App() {
   };
 
   const refreshOutputs = () => {
+    appLog("outputs:refresh", {
+      currentStep: state.currentStep
+    });
     updateState((current) => ensureAnalysis({ ...current }));
   };
 
   const saveFollowUpAnswer = (keyword, value) => {
+    appLog("followup:change", {
+      keyword,
+      valueLength: value.length
+    });
     updateState((current) => ({
       ...current,
       followUpAnswers: {
@@ -282,8 +334,17 @@ export default function App() {
     const details = state.followUpAnswers[keyword]?.trim();
 
     if (!details) {
+      appLog("experience:approve-skipped", {
+        keyword,
+        reason: "missing-details"
+      });
       return;
     }
+
+    appLog("experience:approve", {
+      keyword,
+      detailLength: details.length
+    });
 
     updateState((current) =>
       ensureAnalysis({
@@ -304,6 +365,10 @@ export default function App() {
   };
 
   const updateOutput = (key, value) => {
+    appLog("output:edit", {
+      key,
+      valueLength: value.length
+    });
     updateState((current) => ({
       ...current,
       outputs: {
@@ -314,6 +379,10 @@ export default function App() {
   };
 
   const addSnapshot = () => {
+    appLog("history:save-version", {
+      title: state.job.title,
+      score: state.analysis?.score || null
+    });
     updateState((current) => ({
       ...current,
       versionHistory: [
@@ -328,6 +397,11 @@ export default function App() {
   };
 
   const exportPack = () => {
+    appLog("export:start", {
+      title: state.job.title,
+      company: state.job.company,
+      hasAnalysis: Boolean(state.analysis)
+    });
     const content = buildApplicationPack({
       job: state.job,
       outputs: state.outputs,
@@ -338,6 +412,7 @@ export default function App() {
   };
 
   const useSampleJob = () => {
+    appLog("sample:job");
     updateState((current) => ({
       ...current,
       job: {
@@ -351,6 +426,7 @@ export default function App() {
   };
 
   const useSampleResume = () => {
+    appLog("sample:resume");
     updateState((current) =>
       ensureAnalysis({
         ...current,
@@ -365,8 +441,15 @@ export default function App() {
   };
 
   if (!state.user) {
+    appLog("render:auth-screen");
     return <AuthScreen onSignIn={signIn} />;
   }
+
+  appLog("render:app", {
+    currentStep: state.currentStep,
+    hasAnalysis: Boolean(state.analysis),
+    gapCount: state.analysis?.gaps?.length || 0
+  });
 
   return (
     <div className="app-shell">
