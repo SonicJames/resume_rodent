@@ -656,6 +656,69 @@ html.dark .pill.warn {
   color: #e6b800;
 }
 
+.requirement-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.requirement-item {
+  display: grid;
+  grid-template-columns: 6rem 1fr auto;
+  align-items: baseline;
+  gap: 0.6rem;
+  font-size: 0.92rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  border-left: 3px solid transparent;
+}
+
+.requirement-met {
+  background: rgba(0, 160, 80, 0.07);
+  border-left-color: #00a050;
+}
+
+.requirement-unmet {
+  background: rgba(220, 38, 38, 0.07);
+  border-left-color: #dc2626;
+}
+
+html.dark .requirement-met {
+  background: rgba(0, 160, 80, 0.1);
+}
+
+html.dark .requirement-unmet {
+  background: rgba(220, 38, 38, 0.12);
+}
+
+.requirement-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.requirement-text {
+  color: var(--ink);
+}
+
+.requirement-status {
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.requirement-met .requirement-status {
+  color: #00a050;
+}
+
+.requirement-unmet .requirement-status {
+  color: #dc2626;
+}
+
 .theme-toggle {
   background: none;
   border: 1px solid var(--line);

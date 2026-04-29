@@ -701,6 +701,20 @@ export default function App() {
                   <strong>{state.analysis.missingKeywords.length}</strong>
                 </div>
               </div>
+              {state.analysis.requirements?.length > 0 && (
+                <div className="subtle-card">
+                  <h3>Hard requirements</h3>
+                  <ul className="requirement-list">
+                    {state.analysis.requirements.map((req, i) => (
+                      <li key={i} className={`requirement-item ${req.met ? "requirement-met" : "requirement-unmet"}`}>
+                        <span className="requirement-badge">{req.label}</span>
+                        <span className="requirement-text">{req.text}</span>
+                        <span className="requirement-status">{req.met ? "✓ addressed" : "✗ not found in resume"}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <div className="comparison-grid">
                 <div className="subtle-card">
                   <h3>Strengths</h3>
