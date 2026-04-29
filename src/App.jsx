@@ -1,4 +1,9 @@
 import React, { useEffect, useState } from "react";
+import * as pdfjsLib from "pdfjs-dist";
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  "pdfjs-dist/build/pdf.worker.mjs",
+  import.meta.url
+).href;
 import { analyzeMatch, extractPhrases, inferJobMeta } from "./analysis.js";
 import {
   buildSuggestions,
@@ -9,7 +14,7 @@ import {
   generateTailoredResume
 } from "./generators.js";
 import { buildApplicationPack, downloadTextFile } from "./export.js";
-import { loadState, saveState, steps } from "./state.js";
+import { createInitialState, loadState, saveState, steps } from "./state.js";
 
 const sampleJobDescription = `Title: Senior Product Marketing Manager
 Company: Northstar AI
@@ -92,7 +97,7 @@ const ensureAnalysis = (baseState) => {
   };
 };
 
-const AuthScreen = ({ onSignIn }) => {
+const AuthScreen = ({ onSignIn, darkMode, onToggleDark }) => {
   const [form, setForm] = useState({
     name: "Alex Morgan",
     email: "alex@example.com",
@@ -106,56 +111,84 @@ const AuthScreen = ({ onSignIn }) => {
   };
 
   return (
-    <section className="auth-shell">
-      <div className="auth-card glass">
-        <p className="eyebrow">AI Job Application Copilot</p>
-        <h1>Build a sharper, honest application pack in one guided workflow.</h1>
-        <p className="lede">
-          Tailor your resume to a role, surface proof gaps, save reusable stories, and export
-          a complete pack without inventing experience.
-        </p>
-        <form className="stack" onSubmit={handleSubmit}>
-          <label>
-            Full name
-            <input
-              value={form.name}
-              onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-              required
-            />
-          </label>
-          <label>
-            Email
-            <input
-              type="email"
-              value={form.email}
-              onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
-              required
-            />
-          </label>
-          <label>
-            Location
-            <input
-              value={form.location}
-              onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))}
-            />
-          </label>
-          <label>
-            LinkedIn or portfolio
-            <input
-              value={form.linkedin}
-              onChange={(event) => setForm((current) => ({ ...current, linkedin: event.target.value }))}
-            />
-          </label>
-          <button className="primary" type="submit">
-            Sign in and open dashboard
+    <div className="landing-page">
+      <header className="header">
+        <div className="logo">
+          <h1>Resume Rodent</h1>
+          <p>AI Job Application Copilot</p>
+        </div>
+        <nav className="nav">
+          <a href="#features">Features</a>
+          <a href="#how-it-works">How It Works</a>
+          <a href="#pricing">Pricing</a>
+          <button className="theme-toggle" type="button" onClick={onToggleDark} aria-label="Toggle dark mode">
+            {darkMode ? "☀️" : "🌙"}
           </button>
-        </form>
-      </div>
-    </section>
+        </nav>
+      </header>
+      <section className="hero-section">
+        <div className="hero-content">
+          <h1>Build a sharper, honest application pack in one guided workflow.</h1>
+          <p className="hero-description">
+            Tailor your resume to a role, surface proof gaps, save reusable stories, and export
+            a complete pack without inventing experience.
+          </p>
+          <div className="hero-stats">
+            <div className="stat">
+              <strong>95%</strong>
+              <span>of candidates abandon applications</span>
+            </div>
+            <div className="stat">
+              <strong>5x</strong>
+              <span>higher completion rate</span>
+            </div>
+          </div>
+        </div>
+        <div className="auth-card glass">
+          <h2>Get Started</h2>
+          <form className="stack" onSubmit={handleSubmit}>
+            <label>
+              Full name
+              <input
+                value={form.name}
+                onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+                required
+              />
+            </label>
+            <label>
+              Email
+              <input
+                type="email"
+                value={form.email}
+                onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
+                required
+              />
+            </label>
+            <label>
+              Location
+              <input
+                value={form.location}
+                onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))}
+              />
+            </label>
+            <label>
+              LinkedIn or portfolio
+              <input
+                value={form.linkedin}
+                onChange={(event) => setForm((current) => ({ ...current, linkedin: event.target.value }))}
+              />
+            </label>
+            <button className="primary" type="submit">
+              Sign in and open dashboard
+            </button>
+          </form>
+        </div>
+      </section>
+    </div>
   );
 };
 
-const StepRail = ({ state, onStepChange }) => (
+const StepRail = ({ state, onStepChange, darkMode, onToggleDark }) => (
   <aside className="rail glass">
     <div>
       <p className="eyebrow">Workflow</p>
@@ -183,6 +216,9 @@ const StepRail = ({ state, onStepChange }) => (
         <li>Keep the user in control of every editable output.</li>
       </ul>
     </div>
+    <button className="theme-toggle" type="button" onClick={onToggleDark} aria-label="Toggle dark mode">
+      {darkMode ? "☀️" : "🌙"}
+    </button>
   </aside>
 );
 
@@ -215,6 +251,17 @@ export default function App() {
     });
     saveState(state);
   }, [state]);
+
+  const [darkMode, setDarkMode] = useState(
+    () => localStorage.getItem("resume-rodent-dark") === "true"
+  );
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", darkMode);
+    localStorage.setItem("resume-rodent-dark", darkMode);
+  }, [darkMode]);
+
+  const toggleDark = () => setDarkMode((d) => !d);
 
   const updateState = (updater) => {
     setState((current) => updater(current));
@@ -294,7 +341,22 @@ export default function App() {
       type: file.type
     });
 
-    const rawText = await file.text();
+    let rawText;
+    if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const pages = await Promise.all(
+        Array.from({ length: pdf.numPages }, (_, i) =>
+          pdf.getPage(i + 1).then((page) => page.getTextContent())
+        )
+      );
+      rawText = pages
+        .flatMap((content) => content.items.map((item) => item.str))
+        .join(" ")
+        .replace(/ {2,}/g, "\n");
+    } else {
+      rawText = await file.text();
+    }
 
     updateState((current) =>
       ensureAnalysis({
@@ -440,9 +502,18 @@ export default function App() {
     );
   };
 
+  const handleClear = () => {
+    const initial = createInitialState();
+    updateState((current) => ({
+      ...initial,
+      user: current.user,
+      experienceBank: current.experienceBank
+    }));
+  };
+
   if (!state.user) {
     appLog("render:auth-screen");
-    return <AuthScreen onSignIn={signIn} />;
+    return <AuthScreen onSignIn={signIn} darkMode={darkMode} onToggleDark={toggleDark} />;
   }
 
   appLog("render:app", {
@@ -456,6 +527,8 @@ export default function App() {
       <StepRail
         state={state}
         onStepChange={(stepId) => updateState((current) => ({ ...current, currentStep: stepId }))}
+        darkMode={darkMode}
+        onToggleDark={toggleDark}
       />
       <main className="content">
         <section className="hero glass">
@@ -480,6 +553,9 @@ export default function App() {
               <span>Saved stories</span>
               <strong>{state.experienceBank.length}</strong>
             </div>
+            <button className="ghost" type="button" onClick={handleClear}>
+              Clear job &amp; resume
+            </button>
           </div>
         </section>
 
@@ -559,7 +635,7 @@ export default function App() {
                 <textarea
                   name="resume"
                   rows="14"
-                  placeholder="Paste your resume text or load a plain-text file"
+                  placeholder="Paste your resume text or upload a PDF / plain-text file"
                   value={state.resume.rawText}
                   onChange={(event) =>
                     updateState((current) => ({
@@ -578,16 +654,12 @@ export default function App() {
             </form>
             <div className="stack">
               <label className="upload-card">
-                <span>Upload `.txt`, `.md`, or exported plain-text resume</span>
-                <input type="file" accept=".txt,.md,.text" onChange={handleFileUpload} />
+                <span>Upload a PDF, `.txt`, or `.md` resume</span>
+                <input type="file" accept=".pdf,.txt,.md,.text" onChange={handleFileUpload} />
               </label>
               <div className="subtle-card">
                 <h3>Current source</h3>
                 <p>{state.resume.fileName || "No file uploaded yet"}</p>
-                <p className="muted">
-                  This MVP reads text-based resumes client-side. PDF and DOCX parsing is a clean
-                  next backend integration point.
-                </p>
               </div>
               <div className="subtle-card">
                 <h3>Parsed highlights</h3>

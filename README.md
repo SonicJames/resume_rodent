@@ -2,6 +2,8 @@
 
 A responsive React + Vite MVP for tailoring resumes to specific roles and generating a complete application pack.
 
+🚀 **Live Demo**: [https://resumerodent.vercel.app](https://resumerodent.vercel.app)
+
 ## What is included
 
 - Mock sign-in and guided dashboard
