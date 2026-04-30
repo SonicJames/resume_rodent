@@ -764,28 +764,38 @@ export default function App() {
             <>
               <div className="metric-grid">
                 <div className="score-card accent">
-                  <span>ATS match score</span>
+                  <span>Match score</span>
                   <strong>{state.analysis.score}%</strong>
                   <p>{state.analysis.fitRating}</p>
                 </div>
                 <div className="score-card">
-                  <span>Matched keywords</span>
-                  <strong>{state.analysis.matchedKeywords.length}</strong>
+                  <span>Requirements met</span>
+                  <strong>
+                    {state.analysis.requirements?.filter((r) => r.met).length ?? "—"} of {state.analysis.requirements?.length ?? "—"}
+                  </strong>
                 </div>
                 <div className="score-card">
-                  <span>Missing keywords</span>
-                  <strong>{state.analysis.missingKeywords.length}</strong>
+                  <span>Evidence gaps</span>
+                  <strong>{state.analysis.gaps?.length ?? "—"}</strong>
                 </div>
               </div>
+              {state.analysis.overview && (
+                <div className="subtle-card">
+                  <p>{state.analysis.overview}</p>
+                </div>
+              )}
               {state.analysis.requirements?.length > 0 && (
                 <div className="subtle-card">
-                  <h3>Hard requirements</h3>
+                  <h3>Role requirements</h3>
                   <ul className="requirement-list">
                     {state.analysis.requirements.map((req, i) => (
                       <li key={i} className={`requirement-item ${req.met ? "requirement-met" : "requirement-unmet"}`}>
-                        <span className="requirement-badge">{req.label}</span>
-                        <span className="requirement-text">{req.text}</span>
-                        <span className="requirement-status">{req.met ? "✓ addressed" : "✗ not found in resume"}</span>
+                        <span className="requirement-badge">{req.label || req.category}</span>
+                        <span className="requirement-text">
+                          {req.text}
+                          {req.evidence && <em className="requirement-evidence"> — {req.evidence}</em>}
+                        </span>
+                        <span className="requirement-status">{req.met ? "✓ met" : "✗ gap"}</span>
                       </li>
                     ))}
                   </ul>
@@ -797,27 +807,10 @@ export default function App() {
                   <ListOrFallback items={state.analysis.strengths} fallback="No strengths surfaced yet." />
                 </div>
                 <div className="subtle-card">
-                  <h3>Gaps</h3>
+                  <h3>Evidence gaps</h3>
                   <ListOrFallback
-                    items={state.analysis.gaps.map((gap) => `${gap.keyword}: ${gap.prompt}`)}
+                    items={state.analysis.gaps.map((gap) => gap.detail || `${gap.keyword}: ${gap.prompt}`)}
                     fallback="No major gaps detected."
-                  />
-                </div>
-                <div className="subtle-card">
-                  <h3>Missing keywords</h3>
-                  <div className="pill-row">
-                    {state.analysis.missingKeywords.map((item) => (
-                      <span className="pill warn" key={item}>
-                        {item}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <div className="subtle-card">
-                  <h3>Why these suggestions?</h3>
-                  <ListOrFallback
-                    items={state.suggestions.map((item) => `${item.title}: ${item.reason}`)}
-                    fallback="Suggestions will appear after analysis."
                   />
                 </div>
               </div>
