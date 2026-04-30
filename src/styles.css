@@ -878,6 +878,12 @@ html.dark .requirement-unmet {
   align-items: end;
 }
 
+.job-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .url-extract-btn {
   flex-shrink: 0;
   border-radius: var(--radius-md);

@@ -528,17 +528,24 @@ export default function App() {
         body: JSON.stringify({ url })
       });
       const data = await res.json();
-      if (data.text) {
-        const meta = inferJobMeta(data.text, url);
-        updateState((current) => ({
-          ...current,
-          job: {
-            ...current.job,
-            ...meta,
-            description: data.text,
-            parsedRequirements: extractPhrases(data.text)
+      if (data.description) {
+        updateState((current) => {
+          const next = {
+            ...current,
+            job: {
+              ...current.job,
+              title: data.title || current.job.title,
+              location: data.location || current.job.location,
+              salary: data.salary || current.job.salary,
+              description: data.description,
+              parsedRequirements: extractPhrases(data.description)
+            }
+          };
+          if (next.resume.rawText) {
+            runAIAnalysis(data.description, next.resume.rawText, next.experienceBank);
           }
-        }));
+          return next;
+        });
       }
     } catch (err) {
       console.warn("[App] scrape failed:", err.message);
@@ -658,6 +665,12 @@ export default function App() {
                 {isScraping ? "…" : "Extract"}
               </button>
             </div>
+            {(state.job.location || state.job.salary) && (
+              <div className="job-meta-row">
+                {state.job.location && <span className="pill">📍 {state.job.location}</span>}
+                {state.job.salary && <span className="pill">💰 {state.job.salary}</span>}
+              </div>
+            )}
             <label>
               Job description
               <textarea

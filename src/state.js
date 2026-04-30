@@ -20,6 +20,8 @@ export const createInitialState = () => ({
     title: "",
     company: "",
     url: "",
+    location: "",
+    salary: "",
     description: "",
     parsedRequirements: []
   },
