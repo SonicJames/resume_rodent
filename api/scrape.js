@@ -55,7 +55,9 @@ ${rawText}`
       ]
     });
 
-    const raw = message.content[0]?.text?.trim() || "{}";
+    const raw = (message.content[0]?.text?.trim() || "{}")
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/\s*```$/, "");
     let result;
     try {
       result = JSON.parse(raw);
