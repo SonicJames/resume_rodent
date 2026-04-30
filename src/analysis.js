@@ -240,3 +240,24 @@ export const analyzeMatch = ({ jobDescription, resumeText, experienceBank }) => 
 
   return result;
 };
+
+export const analyzeWithAI = async ({ jobDescription, resumeText, experienceBank }) => {
+  const response = await fetch("/api/analyze", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jobDescription, resumeText, experienceBank })
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || `HTTP ${response.status}`);
+  }
+
+  const data = await response.json();
+  analysisLog("analyze-with-ai", {
+    score: data.score,
+    fitRating: data.fitRating,
+    requirementCount: data.requirements?.length || 0
+  });
+  return data;
+};

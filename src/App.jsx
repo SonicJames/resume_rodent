@@ -4,7 +4,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.mjs",
   import.meta.url
 ).href;
-import { analyzeMatch, extractPhrases, inferJobMeta } from "./analysis.js";
+import { analyzeMatch, analyzeWithAI, extractPhrases, inferJobMeta } from "./analysis.js";
 import {
   buildSuggestions,
   createVersionSnapshot,
@@ -263,6 +263,24 @@ export default function App() {
 
   const toggleDark = () => setDarkMode((d) => !d);
 
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  const runAIAnalysis = (jobDescription, resumeText, experienceBank) => {
+    if (!jobDescription || !resumeText) return;
+    setIsAnalyzing(true);
+    analyzeWithAI({ jobDescription, resumeText, experienceBank })
+      .then((aiResult) => {
+        setState((current) => ({
+          ...current,
+          analysis: { ...current.analysis, ...aiResult }
+        }));
+      })
+      .catch((err) => {
+        console.warn("[App] AI analysis failed, keeping local result:", err.message);
+      })
+      .finally(() => setIsAnalyzing(false));
+  };
+
   const updateState = (updater) => {
     setState((current) => updater(current));
   };
@@ -290,8 +308,8 @@ export default function App() {
       inferredCompany: meta.company
     });
 
-    updateState((current) =>
-      ensureAnalysis({
+    updateState((current) => {
+      const next = ensureAnalysis({
         ...current,
         currentStep: "resume",
         job: {
@@ -301,8 +319,12 @@ export default function App() {
           description,
           parsedRequirements: extractPhrases(description)
         }
-      })
-    );
+      });
+      if (next.resume.rawText) {
+        runAIAnalysis(description, next.resume.rawText, next.experienceBank);
+      }
+      return next;
+    });
   };
 
   const handleResumeSubmit = (event) => {
@@ -314,8 +336,8 @@ export default function App() {
       length: rawText.length
     });
 
-    updateState((current) =>
-      ensureAnalysis({
+    updateState((current) => {
+      const next = ensureAnalysis({
         ...current,
         currentStep: "analysis",
         resume: {
@@ -323,8 +345,12 @@ export default function App() {
           rawText,
           parsedHighlights: extractPhrases(rawText)
         }
-      })
-    );
+      });
+      if (next.job.description) {
+        runAIAnalysis(next.job.description, rawText, next.experienceBank);
+      }
+      return next;
+    });
   };
 
   const handleFileUpload = async (event) => {
@@ -358,8 +384,8 @@ export default function App() {
       rawText = await file.text();
     }
 
-    updateState((current) =>
-      ensureAnalysis({
+    updateState((current) => {
+      const next = ensureAnalysis({
         ...current,
         resume: {
           ...current.resume,
@@ -367,8 +393,12 @@ export default function App() {
           rawText,
           parsedHighlights: extractPhrases(rawText)
         }
-      })
-    );
+      });
+      if (next.job.description) {
+        runAIAnalysis(next.job.description, rawText, next.experienceBank);
+      }
+      return next;
+    });
   };
 
   const refreshOutputs = () => {
@@ -376,6 +406,9 @@ export default function App() {
       currentStep: state.currentStep
     });
     updateState((current) => ensureAnalysis({ ...current }));
+    if (state.job.description && state.resume.rawText) {
+      runAIAnalysis(state.job.description, state.resume.rawText, state.experienceBank);
+    }
   };
 
   const saveFollowUpAnswer = (keyword, value) => {
@@ -489,8 +522,8 @@ export default function App() {
 
   const useSampleResume = () => {
     appLog("sample:resume");
-    updateState((current) =>
-      ensureAnalysis({
+    updateState((current) => {
+      const next = ensureAnalysis({
         ...current,
         resume: {
           ...current.resume,
@@ -498,8 +531,12 @@ export default function App() {
           rawText: sampleResume,
           parsedHighlights: extractPhrases(sampleResume)
         }
-      })
-    );
+      });
+      if (next.job.description) {
+        runAIAnalysis(next.job.description, sampleResume, next.experienceBank);
+      }
+      return next;
+    });
   };
 
   const handleClear = () => {
@@ -682,6 +719,11 @@ export default function App() {
               Refresh analysis
             </button>
           </div>
+          {isAnalyzing && (
+            <div className="empty-state" style={{ marginBottom: "0.75rem", borderStyle: "solid", borderColor: "var(--accent)", color: "var(--accent-strong)" }}>
+              Analyzing with AI — semantic match in progress...
+            </div>
+          )}
           {!state.analysis ? (
             <div className="empty-state">Complete the job and resume steps to generate an analysis.</div>
           ) : (
