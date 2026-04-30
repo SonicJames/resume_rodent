@@ -335,6 +335,82 @@ const PanelSection = ({ className = "", stepId, children }) => (
   </section>
 );
 
+const CHAT_GREETING = { role: "assistant", content: "What kind of role are you looking for?", jobs: null, _initial: true };
+
+const JobFinderChat = ({ onImport }) => {
+  const [messages, setMessages] = useState([CHAT_GREETING]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const threadRef = useRef(null);
+
+  useEffect(() => {
+    if (threadRef.current) {
+      threadRef.current.scrollTop = threadRef.current.scrollHeight;
+    }
+  }, [messages, loading]);
+
+  const send = async () => {
+    if (!input.trim() || loading) return;
+    const userMsg = { role: "user", content: input, jobs: null };
+    const apiHistory = [...messages.filter((m) => !m._initial), userMsg].map(({ role, content }) => ({ role, content }));
+    setMessages((prev) => [...prev, userMsg]);
+    setInput("");
+    setLoading(true);
+    try {
+      const res = await fetch("/api/job-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: apiHistory })
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setMessages((prev) => [...prev, { role: "assistant", content: data.message, jobs: data.jobs || null }]);
+    } catch (err) {
+      setMessages((prev) => [...prev, { role: "assistant", content: `Sorry, something went wrong: ${err.message}`, jobs: null }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="job-finder-chat">
+      <div className="chat-thread" ref={threadRef}>
+        {messages.map((m, i) => (
+          <div key={i} className={`chat-bubble ${m.role}`}>
+            <p>{m.content}</p>
+            {m.jobs?.map((job, j) => (
+              <div key={job.id || j} className="job-result-card">
+                <div className="job-card-info">
+                  <strong>{job.title}</strong>
+                  <span>{job.company}{job.location ? ` · ${job.location}` : ""}</span>
+                  {job.salary && <span className="pill">{job.salary}</span>}
+                </div>
+                <button type="button" className="ghost" onClick={() => onImport(job)}>
+                  Use This Job →
+                </button>
+              </div>
+            ))}
+          </div>
+        ))}
+        {loading && (
+          <div className="chat-bubble assistant">
+            <p className="muted">Searching…</p>
+          </div>
+        )}
+      </div>
+      <div className="chat-input-row">
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && send()}
+          placeholder="e.g. Senior React developer in New York"
+        />
+        <button type="button" className="primary" onClick={send} disabled={loading || !input.trim()}>→</button>
+      </div>
+    </div>
+  );
+};
+
 const ListOrFallback = ({ items, fallback }) => (
   <ul>{items.length ? items.map((item) => <li key={item}>{item}</li>) : <li>{fallback}</li>}</ul>
 );
@@ -631,6 +707,32 @@ export default function App() {
   };
 
   const [isScraping, setIsScraping] = useState(false);
+  const [intakeMode, setIntakeMode] = useState("url");
+
+  const handleImportFromChat = (job) => {
+    const description = job.description || "";
+    updateState((current) => {
+      const next = ensureAnalysis({
+        ...current,
+        currentStep: "resume",
+        job: {
+          ...current.job,
+          title: job.title || "",
+          company: job.company || "",
+          location: job.location || "",
+          salary: job.salary || "",
+          url: job.url || "",
+          description,
+          parsedRequirements: extractPhrases(description)
+        }
+      });
+      if (next.resume.rawText) {
+        runAIAnalysis(description, next.resume.rawText, next.experienceBank);
+      }
+      return next;
+    });
+    setIntakeMode("url");
+  };
 
   const fetchJobFromUrl = async () => {
     const url = state.job.url.trim();
@@ -971,68 +1073,93 @@ export default function App() {
               <p className="eyebrow">1. Job intake</p>
               <h2>Bring in the role you want to target</h2>
             </div>
-            <label className="pdf-upload-btn ghost">
-              Import PDF
-              <input type="file" accept=".pdf" onChange={handleJobPdfUpload} style={{ display: "none" }} />
-            </label>
+            <div className="panel-actions">
+              <div className="intake-tabs">
+                {[["url", "URL"], ["paste", "Paste"], ["browse", "Browse Jobs"]].map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    className={`tab${intakeMode === mode ? " active" : ""}`}
+                    onClick={() => setIntakeMode(mode)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <label className="pdf-upload-btn ghost">
+                Import PDF
+                <input type="file" accept=".pdf" onChange={handleJobPdfUpload} style={{ display: "none" }} />
+              </label>
+            </div>
           </div>
-          <form className="stack" onSubmit={handleJobSubmit}>
-            <div className="url-row">
-              <label style={{ flex: 1 }}>
-                Job URL
-                <input
-                  name="url"
-                  placeholder="https://company.com/jobs/role"
-                  value={state.job.url}
+          {intakeMode === "browse" ? (
+            <JobFinderChat onImport={handleImportFromChat} />
+          ) : (
+            <form className="stack" onSubmit={handleJobSubmit}>
+              {intakeMode === "url" && (
+                <div className="url-row">
+                  <label style={{ flex: 1 }}>
+                    Job URL
+                    <input
+                      name="url"
+                      placeholder="https://company.com/jobs/role"
+                      value={state.job.url}
+                      onChange={(event) =>
+                        updateState((current) => ({
+                          ...current,
+                          job: { ...current.job, url: event.target.value }
+                        }))
+                      }
+                    />
+                  </label>
+                  <button
+                    className="ghost url-extract-btn"
+                    type="button"
+                    onClick={fetchJobFromUrl}
+                    disabled={!state.job.url.trim() || isScraping}
+                  >
+                    {isScraping ? "…" : "Extract"}
+                  </button>
+                </div>
+              )}
+              {intakeMode === "url" && (state.job.location || state.job.salary) && (
+                <div className="job-meta-row">
+                  {state.job.location && <span className="pill">📍 {state.job.location}</span>}
+                  {state.job.salary && <span className="pill">💰 {state.job.salary}</span>}
+                </div>
+              )}
+              {intakeMode === "paste" && (
+                <input type="hidden" name="url" value="" />
+              )}
+              <label>
+                Job description
+                <textarea
+                  name="description"
+                  rows={intakeMode === "paste" ? "14" : "12"}
+                  placeholder="Paste the job post text here"
+                  value={state.job.description}
                   onChange={(event) =>
                     updateState((current) => ({
                       ...current,
-                      job: { ...current.job, url: event.target.value }
+                      job: { ...current.job, description: event.target.value }
                     }))
                   }
                 />
               </label>
-              <button
-                className="ghost url-extract-btn"
-                type="button"
-                onClick={fetchJobFromUrl}
-                disabled={!state.job.url.trim() || isScraping}
-              >
-                {isScraping ? "…" : "Extract"}
+              <button className="primary" type="submit">
+                Parse job and continue
               </button>
+            </form>
+          )}
+          {intakeMode !== "browse" && (
+            <div className="pill-row">
+              {state.job.parsedRequirements.map((item) => (
+                <span className="pill" key={item}>
+                  {item}
+                </span>
+              ))}
             </div>
-            {(state.job.location || state.job.salary) && (
-              <div className="job-meta-row">
-                {state.job.location && <span className="pill">📍 {state.job.location}</span>}
-                {state.job.salary && <span className="pill">💰 {state.job.salary}</span>}
-              </div>
-            )}
-            <label>
-              Job description
-              <textarea
-                name="description"
-                rows="12"
-                placeholder="Paste the job post text here"
-                value={state.job.description}
-                onChange={(event) =>
-                  updateState((current) => ({
-                    ...current,
-                    job: { ...current.job, description: event.target.value }
-                  }))
-                }
-              />
-            </label>
-            <button className="primary" type="submit">
-              Parse job and continue
-            </button>
-          </form>
-          <div className="pill-row">
-            {state.job.parsedRequirements.map((item) => (
-              <span className="pill" key={item}>
-                {item}
-              </span>
-            ))}
-          </div>
+          )}
         </PanelSection>
 
         <PanelSection stepId="resume">
