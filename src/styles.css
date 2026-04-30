@@ -212,9 +212,9 @@ ul {
 }
 
 .rat-illustration {
-  width: 220px;
+  width: 440px;
   height: auto;
-  margin-bottom: 1.5rem;
+  margin: 0 auto 1.5rem;
   display: block;
 }
 
@@ -296,9 +296,9 @@ ul {
 }
 
 .rat-illustration {
-  width: 220px;
+  width: 440px;
   height: auto;
-  margin-bottom: 1.5rem;
+  margin: 0 auto 1.5rem;
   display: block;
 }
 
@@ -623,16 +623,22 @@ ul {
   }
 
   .rat-illustration {
-    width: 110px;
-    margin-bottom: 0.75rem;
+    width: 200px;
+    margin: 0 auto 0.75rem;
   }
 
   .hero-content h1 {
     font-size: 1.35rem;
     margin-bottom: 0.35rem;
+    text-align: center;
   }
 
-  .hero-description,
+  .hero-description {
+    font-size: 0.95rem;
+    margin-bottom: 0.75rem;
+    text-align: center;
+  }
+
   .hero-stats {
     display: none;
   }
