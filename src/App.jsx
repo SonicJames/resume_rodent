@@ -222,8 +222,13 @@ const StepRail = ({ state, onStepChange, darkMode, onToggleDark }) => (
   </aside>
 );
 
-const PanelSection = ({ className = "", children }) => (
-  <section className={`panel ${className}`.trim()}>{children}</section>
+const PanelSection = ({ className = "", stepId, children }) => (
+  <section
+    className={`panel ${className}`.trim()}
+    {...(stepId ? { "data-step": stepId } : {})}
+  >
+    {children}
+  </section>
 );
 
 const ListOrFallback = ({ items, fallback }) => (
@@ -567,7 +572,7 @@ export default function App() {
         darkMode={darkMode}
         onToggleDark={toggleDark}
       />
-      <main className="content">
+      <main className="content" data-current-step={state.currentStep}>
         <section className="hero glass">
           <div>
             <p className="eyebrow">Dashboard</p>
@@ -596,7 +601,7 @@ export default function App() {
           </div>
         </section>
 
-        <PanelSection>
+        <PanelSection stepId="job">
           <div className="panel-heading">
             <div>
               <p className="eyebrow">1. Job intake</p>
@@ -655,7 +660,7 @@ export default function App() {
           </div>
         </PanelSection>
 
-        <PanelSection>
+        <PanelSection stepId="resume">
           <div className="panel-heading">
             <div>
               <p className="eyebrow">2. Resume upload</p>
@@ -709,7 +714,7 @@ export default function App() {
           </div>
         </PanelSection>
 
-        <PanelSection>
+        <PanelSection stepId="analysis">
           <div className="panel-heading">
             <div>
               <p className="eyebrow">3. Match analysis</p>
@@ -791,7 +796,7 @@ export default function App() {
           )}
         </PanelSection>
 
-        <PanelSection>
+        <PanelSection stepId="followup">
           <div className="panel-heading">
             <div>
               <p className="eyebrow">4. Gap follow-up</p>
@@ -827,7 +832,7 @@ export default function App() {
           )}
         </PanelSection>
 
-        <PanelSection>
+        <PanelSection stepId="outputs">
           <div className="panel-heading">
             <div>
               <p className="eyebrow">5. Application pack</p>
