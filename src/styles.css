@@ -370,6 +370,12 @@ ul {
   border-color: rgba(15, 118, 110, 0.28);
 }
 
+.step-icon {
+  display: none;
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
 .step-index {
   font-family: "IBM Plex Mono", monospace;
   color: var(--accent-strong);
@@ -669,15 +675,24 @@ ul {
   }
 
   .step {
-    flex: 0 0 auto;
-    padding: 0.4rem 0.85rem;
+    flex: 1 1 0;
+    padding: 0.4rem 0.25rem;
     border-radius: var(--radius-sm);
     font-size: 0.8rem;
-    white-space: nowrap;
+    justify-content: center;
   }
 
-  .step-index {
+  .step-icon {
+    display: inline;
+  }
+
+  .step-index,
+  .step-label {
     display: none;
+  }
+
+  .step-list {
+    justify-content: space-around;
   }
 
   /* === Content area: strip gaps and borders === */

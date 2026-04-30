@@ -188,6 +188,8 @@ const AuthScreen = ({ onSignIn, darkMode, onToggleDark }) => {
   );
 };
 
+const STEP_ICONS = { job: "💼", resume: "📄", analysis: "🎯", followup: "✍️", outputs: "📦" };
+
 const StepRail = ({ state, onStepChange, darkMode, onToggleDark }) => (
   <aside className="rail glass">
     <div>
@@ -202,9 +204,11 @@ const StepRail = ({ state, onStepChange, darkMode, onToggleDark }) => (
           className={`step ${state.currentStep === step.id ? "step-active" : ""}`}
           onClick={() => onStepChange(step.id)}
           type="button"
+          title={step.label}
         >
+          <span className="step-icon">{STEP_ICONS[step.id]}</span>
           <span className="step-index">0{index + 1}</span>
-          <span>{step.label}</span>
+          <span className="step-label">{step.label}</span>
         </button>
       ))}
     </div>
