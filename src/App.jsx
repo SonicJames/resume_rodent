@@ -105,6 +105,7 @@ const AuthScreen = ({ darkMode, onToggleDark }) => {
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (err) {
+      console.error("[Auth] sign-in error:", err.code, err.message);
       if (err.code !== "auth/popup-closed-by-user") {
         setError("Sign-in failed. Please try again.");
       }
