@@ -627,7 +627,8 @@ ul {
   }
 
   .rat-illustration {
-    display: none;
+    max-width: 160px;
+    margin: 0 auto 0.5rem;
   }
 
   .hero-content h1 {
