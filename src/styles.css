@@ -6,9 +6,9 @@
   --ink: #212529;
   --muted: #6c757d;
   --line: #dee2e6;
-  --accent: #FFD700;
-  --accent-strong: #B8860B;
-  --accent-soft: #FFF8DC;
+  --accent: #C8960C;
+  --accent-strong: #9A6F00;
+  --accent-soft: #FDF3DC;
   --warn: #ffc107;
   --shadow: 0 2px 4px rgba(0,0,0,0.1);
   --radius-lg: 8px;
@@ -24,9 +24,9 @@ html.dark {
   --ink: #e6edf3;
   --muted: #8b949e;
   --line: #30363d;
-  --accent: #FFD700;
-  --accent-strong: #f0c000;
-  --accent-soft: #2d2800;
+  --accent: #C8960C;
+  --accent-strong: #E8B420;
+  --accent-soft: #2d2200;
   --warn: #d29922;
   --shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
@@ -475,12 +475,12 @@ ul {
 
 .accent {
   background: var(--accent);
-  color: white;
+  color: #1a1200;
 }
 
 .accent span,
 .accent p {
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(26, 18, 0, 0.7);
 }
 
 .panel-heading,

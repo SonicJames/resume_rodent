@@ -95,29 +95,31 @@ export const extractRequirements = (jobDescription, resumeText) => {
 };
 
 const STOP_WORDS = new Set([
-  "about",
-  "after",
-  "also",
-  "an",
-  "and",
-  "are",
-  "because",
-  "been",
-  "being",
-  "but",
-  "for",
-  "from",
-  "have",
-  "into",
-  "more",
-  "that",
-  "the",
-  "their",
-  "them",
-  "they",
-  "this",
-  "with",
-  "your"
+  // articles / conjunctions / prepositions
+  "about", "after", "also", "although", "an", "and", "are", "around",
+  "as", "at", "because", "been", "being", "but", "by", "do", "does",
+  "during", "each", "for", "from", "have", "if", "in", "into", "is",
+  "it", "its", "may", "more", "most", "must", "not", "of", "on",
+  "or", "other", "our", "out", "own", "so", "some", "such",
+  "than", "that", "the", "their", "them", "they", "this", "to",
+  "upon", "us", "was", "we", "when", "where", "while", "will",
+  "with", "within", "without", "you", "your",
+  // generic job-description filler
+  "ability", "able", "across", "apply", "background", "based",
+  "both", "bring", "build", "candidates", "collaboration",
+  "communicate", "communication", "company", "daily", "department",
+  "develop", "effective", "effectively", "employee", "employer",
+  "ensure", "environment", "excellent", "experience", "fast",
+  "fast-paced", "follow", "good", "great", "help", "high",
+  "highly", "ideal", "including", "individual", "join", "key",
+  "knowledge", "large", "level", "look", "maintain", "make",
+  "manage", "minimum", "multiple", "need", "new", "opportunity",
+  "paced", "part", "passion", "person", "plus", "position",
+  "preferred", "problem", "provide", "quality", "required",
+  "requirements", "responsibilities", "results", "role", "seek",
+  "skills", "solving", "strong", "success", "support", "take",
+  "team", "time", "tools", "track", "use", "using", "various",
+  "well", "what", "work", "working", "written", "year", "years"
 ]);
 
 const analysisLog = (event, payload) => {
@@ -136,9 +138,23 @@ export const extractKeywords = (text, limit = 18) => {
   const tokens = normalized.split(" ");
   const counts = new Map();
 
+  // Single meaningful tokens
   for (const token of tokens) {
-    if (token.length < 4 || STOP_WORDS.has(token)) continue;
+    if (token.length < 3 || STOP_WORDS.has(token)) continue;
     counts.set(token, (counts.get(token) || 0) + 1);
+  }
+
+  // Bigrams — two consecutive meaningful words form richer requirement phrases
+  for (let i = 0; i < tokens.length - 1; i++) {
+    const w1 = tokens[i];
+    const w2 = tokens[i + 1];
+    if (
+      w1.length >= 3 && w2.length >= 3 &&
+      !STOP_WORDS.has(w1) && !STOP_WORDS.has(w2)
+    ) {
+      const bigram = `${w1} ${w2}`;
+      counts.set(bigram, (counts.get(bigram) || 0) + 1.5); // weight bigrams higher
+    }
   }
 
   const keywords = [...counts.entries()]
