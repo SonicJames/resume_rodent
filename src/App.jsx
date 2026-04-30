@@ -515,18 +515,36 @@ export default function App() {
     downloadTextFile(`${safeTitle}-application-pack.txt`, content);
   };
 
-  const useSampleJob = () => {
-    appLog("sample:job");
-    updateState((current) => ({
-      ...current,
-      job: {
-        ...current.job,
-        ...inferJobMeta(sampleJobDescription, "https://northstar.example/jobs"),
-        url: "https://northstar.example/jobs",
-        description: sampleJobDescription,
-        parsedRequirements: extractPhrases(sampleJobDescription)
+  const [isScraping, setIsScraping] = useState(false);
+
+  const fetchJobFromUrl = async () => {
+    const url = state.job.url.trim();
+    if (!url) return;
+    setIsScraping(true);
+    try {
+      const res = await fetch("/api/scrape", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url })
+      });
+      const data = await res.json();
+      if (data.text) {
+        const meta = inferJobMeta(data.text, url);
+        updateState((current) => ({
+          ...current,
+          job: {
+            ...current.job,
+            ...meta,
+            description: data.text,
+            parsedRequirements: extractPhrases(data.text)
+          }
+        }));
       }
-    }));
+    } catch (err) {
+      console.warn("[App] scrape failed:", err.message);
+    } finally {
+      setIsScraping(false);
+    }
   };
 
   const useSampleResume = () => {
@@ -611,28 +629,35 @@ export default function App() {
               <p className="eyebrow">1. Job intake</p>
               <h2>Bring in the role you want to target</h2>
             </div>
-            <button className="ghost" type="button" onClick={useSampleJob}>
-              Load sample role
-            </button>
           </div>
           <form className="stack" onSubmit={handleJobSubmit}>
-            <label>
-              Job URL
-              <input
-                name="url"
-                placeholder="https://company.com/jobs/role"
-                value={state.job.url}
-                onChange={(event) =>
-                  updateState((current) => ({
-                    ...current,
-                    job: {
-                      ...current.job,
-                      url: event.target.value
-                    }
-                  }))
-                }
-              />
-            </label>
+            <div className="url-row">
+              <label style={{ flex: 1 }}>
+                Job URL
+                <input
+                  name="url"
+                  placeholder="https://company.com/jobs/role"
+                  value={state.job.url}
+                  onChange={(event) =>
+                    updateState((current) => ({
+                      ...current,
+                      job: {
+                        ...current.job,
+                        url: event.target.value
+                      }
+                    }))
+                  }
+                />
+              </label>
+              <button
+                className="ghost url-extract-btn"
+                type="button"
+                onClick={fetchJobFromUrl}
+                disabled={!state.job.url.trim() || isScraping}
+              >
+                {isScraping ? "…" : "Extract"}
+              </button>
+            </div>
             <label>
               Job description
               <textarea

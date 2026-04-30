@@ -867,6 +867,19 @@ html.dark .requirement-unmet {
   color: #dc2626;
 }
 
+.url-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.url-extract-btn {
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  padding: 0.95rem 1.1rem;
+  white-space: nowrap;
+}
+
 .theme-toggle {
   background: none;
   border: 1px solid var(--line);
