@@ -212,10 +212,12 @@ ul {
 }
 
 .rat-illustration {
-  width: 440px;
+  width: 100%;
+  max-width: 520px;
   height: auto;
   margin: 0 auto 1.5rem;
   display: block;
+  border-radius: var(--radius-lg);
 }
 
 .hero-description {
@@ -296,10 +298,12 @@ ul {
 }
 
 .rat-illustration {
-  width: 440px;
+  width: 100%;
+  max-width: 520px;
   height: auto;
   margin: 0 auto 1.5rem;
   display: block;
+  border-radius: var(--radius-lg);
 }
 
 .hero-description {
@@ -623,7 +627,7 @@ ul {
   }
 
   .rat-illustration {
-    width: 200px;
+    max-width: 100%;
     margin: 0 auto 0.75rem;
   }
 
