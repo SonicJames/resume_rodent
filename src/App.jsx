@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { jsPDF } from "jspdf";
 import * as pdfjsLib from "pdfjs-dist";
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.mjs",
@@ -16,7 +17,7 @@ import {
 import { buildApplicationPack, downloadTextFile } from "./export.js";
 import { createInitialState, steps } from "./state.js";
 import { auth, db, googleProvider } from "./firebase.js";
-import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
+import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
 import {
   addDoc,
   collection,
@@ -95,7 +96,7 @@ const ensureAnalysis = (baseState) => {
   };
 };
 
-const AuthScreen = ({ darkMode, onToggleDark }) => {
+const AuthScreen = ({ darkMode, onToggleDark, onToken }) => {
   const [signingIn, setSigningIn] = useState(false);
   const [error, setError] = useState("");
 
@@ -103,7 +104,9 @@ const AuthScreen = ({ darkMode, onToggleDark }) => {
     setSigningIn(true);
     setError("");
     try {
-      await signInWithPopup(auth, googleProvider);
+      const result = await signInWithPopup(auth, googleProvider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (credential?.accessToken) onToken?.(credential.accessToken);
     } catch (err) {
       console.error("[Auth] sign-in error:", err.code, err.message);
       if (err.code !== "auth/popup-closed-by-user") {
@@ -341,6 +344,7 @@ export default function App() {
   const [applications, setApplications] = useState([]);
   const [showAccount, setShowAccount] = useState(false);
   const saveTimerRef = useRef(null);
+  const googleTokenRef = useRef(null);
 
   const [darkMode, setDarkMode] = useState(
     () => localStorage.getItem("resume-rodent-dark") === "true"
@@ -779,6 +783,104 @@ export default function App() {
     }
   };
 
+  // --- Export functions ---
+
+  const exportToPDF = (content, filename) => {
+    if (!content.trim()) return;
+    const pdf = new jsPDF({ unit: "mm", format: "a4" });
+    const margin = 16;
+    const maxWidth = pdf.internal.pageSize.getWidth() - margin * 2;
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const lineHeight = 5.5;
+    pdf.setFontSize(10);
+    pdf.setFont("helvetica", "normal");
+    const lines = pdf.splitTextToSize(content, maxWidth);
+    let y = margin;
+    lines.forEach((line) => {
+      if (y + lineHeight > pageHeight - margin) {
+        pdf.addPage();
+        y = margin;
+      }
+      pdf.text(line, margin, y);
+      y += lineHeight;
+    });
+    pdf.save(filename);
+  };
+
+  const [exportingDoc, setExportingDoc] = useState(null);
+
+  const exportToGoogleDoc = async (content, title) => {
+    if (!content.trim()) return;
+    const token = googleTokenRef.current;
+    if (!token) {
+      alert("Google Docs export requires signing out and back in once to grant Drive access.");
+      return;
+    }
+    setExportingDoc(title);
+    try {
+      const boundary = `rr_${Date.now()}`;
+      const body =
+        `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
+        JSON.stringify({ name: title, mimeType: "application/vnd.google-apps.document" }) +
+        `\r\n--${boundary}\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n` +
+        content +
+        `\r\n--${boundary}--`;
+      const res = await fetch(
+        "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": `multipart/related; boundary="${boundary}"`
+          },
+          body
+        }
+      );
+      if (res.status === 401) {
+        googleTokenRef.current = null;
+        alert("Drive access expired. Please sign out and back in, then try again.");
+        return;
+      }
+      if (!res.ok) throw new Error(`Drive API ${res.status}`);
+      const file = await res.json();
+      window.open(`https://docs.google.com/document/d/${file.id}/edit`, "_blank");
+    } catch (err) {
+      console.error("[App] Google Doc export error:", err);
+      alert("Failed to create Google Doc. Please try again.");
+    } finally {
+      setExportingDoc(null);
+    }
+  };
+
+  const handleJobPdfUpload = async (event) => {
+    const [file] = event.target.files || [];
+    if (!file) return;
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const pages = await Promise.all(
+        Array.from({ length: pdf.numPages }, (_, i) =>
+          pdf.getPage(i + 1).then((page) => page.getTextContent())
+        )
+      );
+      const text = pages
+        .flatMap((content) => content.items.map((item) => item.str))
+        .join(" ")
+        .replace(/ {2,}/g, "\n");
+      updateState((current) => ({
+        ...current,
+        job: {
+          ...current.job,
+          description: text,
+          parsedRequirements: extractPhrases(text)
+        }
+      }));
+      event.target.value = "";
+    } catch (err) {
+      console.warn("[App] job PDF upload failed:", err.message);
+    }
+  };
+
   // --- Render ---
 
   if (authLoading) {
@@ -790,7 +892,13 @@ export default function App() {
   }
 
   if (!state.user) {
-    return <AuthScreen darkMode={darkMode} onToggleDark={toggleDark} />;
+    return (
+      <AuthScreen
+        darkMode={darkMode}
+        onToggleDark={toggleDark}
+        onToken={(t) => { googleTokenRef.current = t; }}
+      />
+    );
   }
 
   if (!currentApplicationId) {
@@ -861,6 +969,10 @@ export default function App() {
               <p className="eyebrow">1. Job intake</p>
               <h2>Bring in the role you want to target</h2>
             </div>
+            <label className="pdf-upload-btn ghost">
+              Import PDF
+              <input type="file" accept=".pdf" onChange={handleJobPdfUpload} style={{ display: "none" }} />
+            </label>
           </div>
           <form className="stack" onSubmit={handleJobSubmit}>
             <div className="url-row">
@@ -1128,8 +1240,40 @@ export default function App() {
           <div className="output-grid">
             <div className="editor-card">
               <div className="editor-head">
-                <h3>Tailored resume</h3>
-                <p className="muted">AI rewrites for relevance, but leaves final approval to you.</p>
+                <div>
+                  <h3>Tailored resume</h3>
+                  <p className="muted">AI rewrites for relevance, but leaves final approval to you.</p>
+                </div>
+                <div className="export-btns">
+                  <button
+                    className="ghost"
+                    type="button"
+                    onClick={() =>
+                      exportToPDF(
+                        state.outputs.tailoredResume,
+                        `${state.job.title || "resume"}-tailored.pdf`
+                      )
+                    }
+                    disabled={!state.outputs.tailoredResume}
+                  >
+                    PDF
+                  </button>
+                  <button
+                    className="ghost"
+                    type="button"
+                    onClick={() =>
+                      exportToGoogleDoc(
+                        state.outputs.tailoredResume,
+                        `${state.job.title || "Resume"} — Tailored Resume`
+                      )
+                    }
+                    disabled={!state.outputs.tailoredResume || exportingDoc !== null}
+                  >
+                    {exportingDoc === `${state.job.title || "Resume"} — Tailored Resume`
+                      ? "Creating…"
+                      : "Google Doc"}
+                  </button>
+                </div>
               </div>
               <textarea
                 rows="18"
@@ -1139,8 +1283,40 @@ export default function App() {
             </div>
             <div className="editor-card">
               <div className="editor-head">
-                <h3>Cover letter</h3>
-                <p className="muted">Grounded in verified evidence and job-specific language.</p>
+                <div>
+                  <h3>Cover letter</h3>
+                  <p className="muted">Grounded in verified evidence and job-specific language.</p>
+                </div>
+                <div className="export-btns">
+                  <button
+                    className="ghost"
+                    type="button"
+                    onClick={() =>
+                      exportToPDF(
+                        state.outputs.coverLetter,
+                        `${state.job.title || "cover-letter"}-cover-letter.pdf`
+                      )
+                    }
+                    disabled={!state.outputs.coverLetter}
+                  >
+                    PDF
+                  </button>
+                  <button
+                    className="ghost"
+                    type="button"
+                    onClick={() =>
+                      exportToGoogleDoc(
+                        state.outputs.coverLetter,
+                        `${state.job.title || "Cover Letter"} — Cover Letter`
+                      )
+                    }
+                    disabled={!state.outputs.coverLetter || exportingDoc !== null}
+                  >
+                    {exportingDoc === `${state.job.title || "Cover Letter"} — Cover Letter`
+                      ? "Creating…"
+                      : "Google Doc"}
+                  </button>
+                </div>
               </div>
               <textarea
                 rows="18"

@@ -12,6 +12,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",
     "firebase": "^12.12.1",
+    "jspdf": "^4.2.1",
     "pdfjs-dist": "^5.6.205",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
