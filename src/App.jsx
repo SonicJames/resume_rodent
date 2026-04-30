@@ -32,6 +32,44 @@ import {
   setDoc
 } from "firebase/firestore";
 
+const RatIllustration = ({ className }) => (
+  <svg className={className} viewBox="0 0 200 230" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <path d="M 115 185 Q 160 195 168 215 Q 172 225 162 228" stroke="#6a8a9d" strokeWidth="4" strokeLinecap="round" fill="none"/>
+    <ellipse cx="100" cy="158" rx="38" ry="45" fill="#7a9aad"/>
+    <path d="M 65 148 Q 45 158 42 172" stroke="#7a9aad" strokeWidth="13" strokeLinecap="round" fill="none"/>
+    <ellipse cx="40" cy="177" rx="9" ry="7" fill="#6a8a9d"/>
+    <path d="M 135 148 Q 152 162 158 172" stroke="#7a9aad" strokeWidth="13" strokeLinecap="round" fill="none"/>
+    <ellipse cx="161" cy="177" rx="9" ry="7" fill="#6a8a9d"/>
+    <path d="M 86 198 Q 80 212 76 220" stroke="#6a8a9d" strokeWidth="12" strokeLinecap="round" fill="none"/>
+    <path d="M 114 198 Q 120 212 124 220" stroke="#6a8a9d" strokeWidth="12" strokeLinecap="round" fill="none"/>
+    <circle cx="100" cy="100" r="42" fill="#7a9aad"/>
+    <circle cx="68" cy="66" r="18" fill="#6a8a9d"/>
+    <circle cx="68" cy="66" r="11" fill="#f0a0b0"/>
+    <circle cx="132" cy="66" r="18" fill="#6a8a9d"/>
+    <circle cx="132" cy="66" r="11" fill="#f0a0b0"/>
+    <ellipse cx="100" cy="116" rx="20" ry="14" fill="#8aaab8"/>
+    <ellipse cx="100" cy="122" rx="6" ry="4" fill="#e07a90"/>
+    <circle cx="83" cy="96" r="15" fill="white"/>
+    <circle cx="117" cy="96" r="15" fill="white"/>
+    <circle cx="86" cy="99" r="10" fill="#1a1a2e"/>
+    <circle cx="120" cy="99" r="10" fill="#1a1a2e"/>
+    <circle cx="80" cy="93" r="4" fill="white"/>
+    <circle cx="114" cy="93" r="4" fill="white"/>
+    <circle cx="89" cy="103" r="2" fill="white" opacity="0.6"/>
+    <circle cx="123" cy="103" r="2" fill="white" opacity="0.6"/>
+    <line x1="83" y1="114" x2="52" y2="107" stroke="#c8d4dc" strokeWidth="1.2" strokeLinecap="round"/>
+    <line x1="82" y1="118" x2="50" y2="118" stroke="#c8d4dc" strokeWidth="1.2" strokeLinecap="round"/>
+    <line x1="83" y1="122" x2="52" y2="129" stroke="#c8d4dc" strokeWidth="1.2" strokeLinecap="round"/>
+    <line x1="117" y1="114" x2="148" y2="107" stroke="#c8d4dc" strokeWidth="1.2" strokeLinecap="round"/>
+    <line x1="118" y1="118" x2="150" y2="118" stroke="#c8d4dc" strokeWidth="1.2" strokeLinecap="round"/>
+    <line x1="117" y1="122" x2="148" y2="129" stroke="#c8d4dc" strokeWidth="1.2" strokeLinecap="round"/>
+    <polygon points="148,178 188,178 188,152" fill="#FFD700" stroke="#B8860B" strokeWidth="1.5"/>
+    <circle cx="172" cy="171" r="5" fill="#B8860B" opacity="0.4"/>
+    <circle cx="181" cy="161" r="4" fill="#B8860B" opacity="0.4"/>
+    <circle cx="162" cy="174" r="3" fill="#B8860B" opacity="0.4"/>
+  </svg>
+);
+
 const sampleResume = `Alex Morgan
 Product marketing strategist with 6+ years of experience building go-to-market programs, launch messaging, and sales enablement materials for B2B SaaS teams.
 
@@ -132,10 +170,11 @@ const AuthScreen = ({ darkMode, onToggleDark, onToken }) => {
       </header>
       <section className="hero-section">
         <div className="hero-content">
-          <h1>Build a sharper, honest application pack in one guided workflow.</h1>
+          <RatIllustration className="rat-illustration" />
+          <h1>Don't let AI hide your job applications.</h1>
           <p className="hero-description">
-            Tailor your resume to a role, surface proof gaps, save reusable stories, and export a
-            complete pack without inventing experience.
+            Let Resume Rodent create accurate resumes and covering letters tailored to the job
+            you're applying for.
           </p>
           <div className="hero-stats">
             <div className="stat">
