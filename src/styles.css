@@ -905,3 +905,214 @@ html.dark .requirement-unmet {
 .theme-toggle:hover {
   background: var(--bg-strong);
 }
+
+/* Google sign-in button */
+.google-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.9rem 1.2rem;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+  font-weight: 600;
+  font-size: 1rem;
+  border: none;
+  transition: opacity 0.15s;
+}
+
+.google-btn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.google-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.error-text {
+  color: #dc2626;
+  font-size: 0.88rem;
+  margin: 0;
+}
+
+/* Dashboard */
+.dashboard-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.account-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  padding: 0.45rem 0.9rem 0.45rem 0.45rem;
+}
+
+.account-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.dashboard-main {
+  flex: 1;
+  padding: 2rem;
+  max-width: 1100px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.dashboard-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  gap: 1rem;
+}
+
+.dashboard-heading h2 {
+  font-size: 1.6rem;
+}
+
+.app-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.app-card {
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.app-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+}
+
+.app-card-body h3 {
+  font-size: 1rem;
+  margin-bottom: 0.25rem;
+}
+
+.app-card-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: auto;
+}
+
+.app-card-score {
+  font-size: 1.1rem;
+  color: var(--accent-strong);
+}
+
+.app-card-date {
+  font-size: 0.8rem;
+  flex: 1;
+}
+
+.app-card-delete {
+  border-radius: var(--radius-sm);
+  padding: 0.3rem 0.7rem;
+  font-size: 0.82rem;
+}
+
+/* Account panel */
+.account-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(340px, 100vw);
+  padding: 1.5rem;
+  border-radius: 0;
+  border-left: 1px solid var(--line);
+  border-top: none;
+  border-right: none;
+  border-bottom: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  z-index: 100;
+  background: var(--panel);
+  box-shadow: -4px 0 24px rgba(0,0,0,0.12);
+}
+
+.account-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.account-avatar-lg {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.account-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: auto;
+}
+
+.danger-btn {
+  border-radius: 999px;
+  padding: 0.9rem 1.2rem;
+  background: #dc2626;
+  color: white;
+  font-weight: 600;
+  border: none;
+  transition: opacity 0.15s;
+}
+
+.danger-btn:hover {
+  opacity: 0.85;
+}
+
+/* Back button in StepRail */
+.back-btn {
+  border-radius: var(--radius-sm);
+  padding: 0.4rem 0.75rem;
+  font-size: 0.88rem;
+}
+
+@media (max-width: 720px) {
+  .dashboard-main {
+    padding: 1rem;
+  }
+
+  .app-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-heading {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .account-panel {
+    width: 100vw;
+  }
+}

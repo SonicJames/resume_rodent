@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.mjs",
@@ -14,12 +14,22 @@ import {
   generateTailoredResume
 } from "./generators.js";
 import { buildApplicationPack, downloadTextFile } from "./export.js";
-import { createInitialState, loadState, saveState, steps } from "./state.js";
-
-const sampleJobDescription = `Title: Senior Product Marketing Manager
-Company: Northstar AI
-
-We are hiring a product marketing leader who can translate complex AI workflows into clear customer messaging. The role requires cross-functional collaboration with product, sales, and customer success teams, strong writing, launch planning, analytics, stakeholder management, and experience tailoring content for enterprise buyers. Familiarity with ATS optimization, interview prep, and application workflow tools is a plus.`;
+import { createInitialState, steps } from "./state.js";
+import { auth, db, googleProvider } from "./firebase.js";
+import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDocs,
+  getDoc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc
+} from "firebase/firestore";
 
 const sampleResume = `Alex Morgan
 Product marketing strategist with 6+ years of experience building go-to-market programs, launch messaging, and sales enablement materials for B2B SaaS teams.
@@ -36,23 +46,14 @@ const appLog = (event, payload) => {
   console.log(`[AI Copilot] ${event}`, payload ?? "");
 };
 
+const sanitize = (obj) =>
+  JSON.parse(JSON.stringify(obj, (_, v) => (v === undefined ? null : v)));
+
 const ensureAnalysis = (baseState) => {
   const jobDescription = baseState.job.description.trim();
   const resumeText = baseState.resume.rawText.trim();
 
-  appLog("ensureAnalysis:start", {
-    hasJobDescription: Boolean(jobDescription),
-    hasResumeText: Boolean(resumeText),
-    experienceBankCount: baseState.experienceBank.length,
-    followUpAnswerCount: Object.keys(baseState.followUpAnswers || {}).length
-  });
-
-  if (!jobDescription || !resumeText) {
-    appLog("ensureAnalysis:skipped", {
-      reason: !jobDescription ? "missing-job-description" : "missing-resume-text"
-    });
-    return baseState;
-  }
+  if (!jobDescription || !resumeText) return baseState;
 
   const analysis = analyzeMatch({
     jobDescription,
@@ -90,24 +91,26 @@ const ensureAnalysis = (baseState) => {
     ...baseState,
     analysis,
     outputs,
-    suggestions: buildSuggestions({
-      analysis,
-      experienceBank: baseState.experienceBank
-    })
+    suggestions: buildSuggestions({ analysis, experienceBank: baseState.experienceBank })
   };
 };
 
-const AuthScreen = ({ onSignIn, darkMode, onToggleDark }) => {
-  const [form, setForm] = useState({
-    name: "Alex Morgan",
-    email: "alex@example.com",
-    location: "London, UK",
-    linkedin: "linkedin.com/in/alexmorgan"
-  });
+const AuthScreen = ({ darkMode, onToggleDark }) => {
+  const [signingIn, setSigningIn] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleSubmit = (event) => {
-    event.preventDefault();
-    onSignIn(form);
+  const handleGoogle = async () => {
+    setSigningIn(true);
+    setError("");
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (err) {
+      if (err.code !== "auth/popup-closed-by-user") {
+        setError("Sign-in failed. Please try again.");
+      }
+    } finally {
+      setSigningIn(false);
+    }
   };
 
   return (
@@ -118,9 +121,6 @@ const AuthScreen = ({ onSignIn, darkMode, onToggleDark }) => {
           <p>AI Job Application Copilot</p>
         </div>
         <nav className="nav">
-          <a href="#features">Features</a>
-          <a href="#how-it-works">How It Works</a>
-          <a href="#pricing">Pricing</a>
           <button className="theme-toggle" type="button" onClick={onToggleDark} aria-label="Toggle dark mode">
             {darkMode ? "☀️" : "🌙"}
           </button>
@@ -130,8 +130,8 @@ const AuthScreen = ({ onSignIn, darkMode, onToggleDark }) => {
         <div className="hero-content">
           <h1>Build a sharper, honest application pack in one guided workflow.</h1>
           <p className="hero-description">
-            Tailor your resume to a role, surface proof gaps, save reusable stories, and export
-            a complete pack without inventing experience.
+            Tailor your resume to a role, surface proof gaps, save reusable stories, and export a
+            complete pack without inventing experience.
           </p>
           <div className="hero-stats">
             <div className="stat">
@@ -146,55 +146,149 @@ const AuthScreen = ({ onSignIn, darkMode, onToggleDark }) => {
         </div>
         <div className="auth-card glass">
           <h2>Get Started</h2>
-          <form className="stack" onSubmit={handleSubmit}>
-            <label>
-              Full name
-              <input
-                value={form.name}
-                onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-                required
-              />
-            </label>
-            <label>
-              Email
-              <input
-                type="email"
-                value={form.email}
-                onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
-                required
-              />
-            </label>
-            <label>
-              Location
-              <input
-                value={form.location}
-                onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))}
-              />
-            </label>
-            <label>
-              LinkedIn or portfolio
-              <input
-                value={form.linkedin}
-                onChange={(event) => setForm((current) => ({ ...current, linkedin: event.target.value }))}
-              />
-            </label>
-            <button className="primary" type="submit">
-              Sign in and open dashboard
-            </button>
-          </form>
+          <p className="muted">Sign in with Google to save and track your applications.</p>
+          <button className="google-btn" onClick={handleGoogle} disabled={signingIn} type="button">
+            {signingIn ? "Signing in…" : "Continue with Google"}
+          </button>
+          {error && <p className="error-text">{error}</p>}
         </div>
       </section>
     </div>
   );
 };
 
+const Dashboard = ({
+  user,
+  applications,
+  onCreate,
+  onOpen,
+  onDelete,
+  onSignOut,
+  onDeleteAccount,
+  darkMode,
+  onToggleDark,
+  showAccount,
+  onToggleAccount
+}) => (
+  <div className="dashboard-shell">
+    <header className="header">
+      <div className="logo">
+        <h1>Resume Rodent</h1>
+      </div>
+      <div className="header-actions">
+        <button className="theme-toggle" type="button" onClick={onToggleDark} aria-label="Toggle dark mode">
+          {darkMode ? "☀️" : "🌙"}
+        </button>
+        <button className="account-btn ghost" type="button" onClick={onToggleAccount}>
+          {user.photoURL && (
+            <img
+              className="account-avatar"
+              src={user.photoURL}
+              alt=""
+              referrerPolicy="no-referrer"
+            />
+          )}
+          <span>{user.name || user.email}</span>
+        </button>
+      </div>
+    </header>
+    <main className="dashboard-main">
+      <div className="dashboard-heading">
+        <h2>My Applications</h2>
+        <button
+          className="primary"
+          type="button"
+          onClick={onCreate}
+          disabled={applications.length >= 10}
+        >
+          {applications.length >= 10 ? "Limit reached (10)" : "New application"}
+        </button>
+      </div>
+      <div className="app-grid">
+        {applications.map((app) => (
+          <article
+            className="app-card glass"
+            key={app.id}
+            onClick={() => onOpen(app.id)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === "Enter" && onOpen(app.id)}
+          >
+            <div className="app-card-body">
+              <h3>{app.job?.title || "Untitled role"}</h3>
+              <p className="muted">{app.job?.company || "No company"}</p>
+            </div>
+            <div className="app-card-footer">
+              {app.analysis?.score != null && (
+                <strong className="app-card-score">{app.analysis.score}%</strong>
+              )}
+              <p className="muted app-card-date">
+                {app.updatedAt?.toDate
+                  ? new Date(app.updatedAt.toDate()).toLocaleDateString()
+                  : ""}
+              </p>
+              <button
+                className="ghost app-card-delete"
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(app.id);
+                }}
+              >
+                Remove
+              </button>
+            </div>
+          </article>
+        ))}
+        {applications.length === 0 && (
+          <div className="empty-state">
+            No applications yet. Click &ldquo;New application&rdquo; to get started.
+          </div>
+        )}
+      </div>
+    </main>
+    {showAccount && (
+      <div className="account-panel glass">
+        <div className="account-panel-head">
+          <h3>Account</h3>
+          <button className="ghost" type="button" onClick={onToggleAccount}>
+            Close
+          </button>
+        </div>
+        {user.photoURL && (
+          <img
+            className="account-avatar-lg"
+            src={user.photoURL}
+            alt=""
+            referrerPolicy="no-referrer"
+          />
+        )}
+        <p>
+          <strong>{user.name}</strong>
+        </p>
+        <p className="muted">{user.email}</p>
+        <div className="account-actions">
+          <button className="ghost" type="button" onClick={onSignOut}>
+            Sign out
+          </button>
+          <button className="danger-btn" type="button" onClick={onDeleteAccount}>
+            Delete account
+          </button>
+        </div>
+      </div>
+    )}
+  </div>
+);
+
 const STEP_ICONS = { job: "💼", resume: "📄", analysis: "🎯", followup: "✍️", outputs: "📦" };
 
-const StepRail = ({ state, onStepChange, darkMode, onToggleDark }) => (
+const StepRail = ({ state, onStepChange, onBack, darkMode, onToggleDark }) => (
   <aside className="rail glass">
     <div>
-      <p className="eyebrow">Workflow</p>
-      <h2>{state.job.title || "New application"}</h2>
+      <button className="ghost back-btn" type="button" onClick={onBack}>
+        ← My applications
+      </button>
+      <h2 style={{ marginTop: "0.75rem" }}>{state.job.title || "New application"}</h2>
       <p className="muted">{state.job.company || "No company selected yet"}</p>
     </div>
     <div className="step-list">
@@ -240,26 +334,12 @@ const ListOrFallback = ({ items, fallback }) => (
 );
 
 export default function App() {
-  const [state, setState] = useState(() => {
-    const initial = loadState();
-    appLog("state:init", {
-      hasUser: Boolean(initial.user),
-      currentStep: initial.currentStep,
-      experienceBankCount: initial.experienceBank.length,
-      versionHistoryCount: initial.versionHistory.length
-    });
-    return initial.user ? ensureAnalysis(initial) : initial;
-  });
-
-  useEffect(() => {
-    appLog("state:save", {
-      currentStep: state.currentStep,
-      hasAnalysis: Boolean(state.analysis),
-      experienceBankCount: state.experienceBank.length,
-      versionHistoryCount: state.versionHistory.length
-    });
-    saveState(state);
-  }, [state]);
+  const [state, setState] = useState(() => createInitialState());
+  const [authLoading, setAuthLoading] = useState(true);
+  const [currentApplicationId, setCurrentApplicationId] = useState(null);
+  const [applications, setApplications] = useState([]);
+  const [showAccount, setShowAccount] = useState(false);
+  const saveTimerRef = useRef(null);
 
   const [darkMode, setDarkMode] = useState(
     () => localStorage.getItem("resume-rodent-dark") === "true"
@@ -271,6 +351,104 @@ export default function App() {
   }, [darkMode]);
 
   const toggleDark = () => setDarkMode((d) => !d);
+
+  // Firebase auth state listener
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      if (fbUser) {
+        try {
+          const profileRef = doc(db, "users", fbUser.uid);
+          const profileSnap = await getDoc(profileRef);
+          let extra = {};
+          if (profileSnap.exists()) {
+            const data = profileSnap.data();
+            extra = { location: data.location || "", linkedin: data.linkedin || "" };
+          } else {
+            await setDoc(profileRef, {
+              name: fbUser.displayName || "",
+              email: fbUser.email || "",
+              location: "",
+              linkedin: "",
+              createdAt: serverTimestamp()
+            });
+          }
+          setState((current) => ({
+            ...current,
+            user: {
+              uid: fbUser.uid,
+              photoURL: fbUser.photoURL || null,
+              name: fbUser.displayName || "",
+              email: fbUser.email || "",
+              ...extra
+            }
+          }));
+        } catch (err) {
+          console.error("[App] auth state error:", err);
+        }
+      } else {
+        setState((current) => ({ ...current, user: null }));
+        setCurrentApplicationId(null);
+        setApplications([]);
+      }
+      setAuthLoading(false);
+    });
+    return unsubscribe;
+  }, []);
+
+  // Real-time applications list
+  useEffect(() => {
+    if (!state.user?.uid) return;
+    const q = query(
+      collection(db, "users", state.user.uid, "applications"),
+      orderBy("updatedAt", "desc")
+    );
+    const unsubscribe = onSnapshot(q, (snap) => {
+      setApplications(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+    return unsubscribe;
+  }, [state.user?.uid]);
+
+  // Debounced auto-save to Firestore
+  useEffect(() => {
+    if (!state.user?.uid || !currentApplicationId) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(async () => {
+      try {
+        const appRef = doc(db, "users", state.user.uid, "applications", currentApplicationId);
+        await setDoc(
+          appRef,
+          {
+            ...sanitize({
+              job: state.job,
+              resume: state.resume,
+              analysis: state.analysis,
+              followUpAnswers: state.followUpAnswers,
+              outputs: state.outputs,
+              experienceBank: state.experienceBank,
+              versionHistory: state.versionHistory,
+              currentStep: state.currentStep
+            }),
+            updatedAt: serverTimestamp()
+          },
+          { merge: true }
+        );
+      } catch (err) {
+        console.error("[App] Firestore save error:", err);
+      }
+    }, 1500);
+    return () => clearTimeout(saveTimerRef.current);
+  }, [
+    state.job,
+    state.resume,
+    state.analysis,
+    state.outputs,
+    state.followUpAnswers,
+    state.experienceBank,
+    state.versionHistory,
+    state.currentStep,
+    currentApplicationId,
+    state.user?.uid
+  ]);
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
@@ -294,15 +472,6 @@ export default function App() {
     setState((current) => updater(current));
   };
 
-  const signIn = (user) => {
-    appLog("auth:sign-in", { email: user.email, location: user.location });
-    updateState((current) => ({
-      ...current,
-      user,
-      currentStep: "job"
-    }));
-  };
-
   const handleJobSubmit = (event) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
@@ -310,12 +479,7 @@ export default function App() {
     const url = `${formData.get("url") || ""}`.trim();
     const meta = inferJobMeta(description, url || "https://example.com");
 
-    appLog("job:submit", {
-      url,
-      descriptionLength: description.length,
-      inferredTitle: meta.title,
-      inferredCompany: meta.company
-    });
+    appLog("job:submit", { url, descriptionLength: description.length });
 
     updateState((current) => {
       const next = ensureAnalysis({
@@ -341,9 +505,7 @@ export default function App() {
     const formData = new FormData(event.currentTarget);
     const rawText = `${formData.get("resume") || ""}`.trim();
 
-    appLog("resume:submit", {
-      length: rawText.length
-    });
+    appLog("resume:submit", { length: rawText.length });
 
     updateState((current) => {
       const next = ensureAnalysis({
@@ -364,17 +526,9 @@ export default function App() {
 
   const handleFileUpload = async (event) => {
     const [file] = event.target.files || [];
+    if (!file) return;
 
-    if (!file) {
-      appLog("resume:file-upload-skipped", { reason: "no-file-selected" });
-      return;
-    }
-
-    appLog("resume:file-upload", {
-      name: file.name,
-      size: file.size,
-      type: file.type
-    });
+    appLog("resume:file-upload", { name: file.name, size: file.size });
 
     let rawText;
     if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
@@ -411,9 +565,6 @@ export default function App() {
   };
 
   const refreshOutputs = () => {
-    appLog("outputs:refresh", {
-      currentStep: state.currentStep
-    });
     updateState((current) => ensureAnalysis({ ...current }));
     if (state.job.description && state.resume.rawText) {
       runAIAnalysis(state.job.description, state.resume.rawText, state.experienceBank);
@@ -421,34 +572,15 @@ export default function App() {
   };
 
   const saveFollowUpAnswer = (keyword, value) => {
-    appLog("followup:change", {
-      keyword,
-      valueLength: value.length
-    });
     updateState((current) => ({
       ...current,
-      followUpAnswers: {
-        ...current.followUpAnswers,
-        [keyword]: value
-      }
+      followUpAnswers: { ...current.followUpAnswers, [keyword]: value }
     }));
   };
 
   const approveExperience = (keyword) => {
     const details = state.followUpAnswers[keyword]?.trim();
-
-    if (!details) {
-      appLog("experience:approve-skipped", {
-        keyword,
-        reason: "missing-details"
-      });
-      return;
-    }
-
-    appLog("experience:approve", {
-      keyword,
-      detailLength: details.length
-    });
+    if (!details) return;
 
     updateState((current) =>
       ensureAnalysis({
@@ -469,48 +601,24 @@ export default function App() {
   };
 
   const updateOutput = (key, value) => {
-    appLog("output:edit", {
-      key,
-      valueLength: value.length
-    });
     updateState((current) => ({
       ...current,
-      outputs: {
-        ...current.outputs,
-        [key]: value
-      }
+      outputs: { ...current.outputs, [key]: value }
     }));
   };
 
   const addSnapshot = () => {
-    appLog("history:save-version", {
-      title: state.job.title,
-      score: state.analysis?.score || null
-    });
     updateState((current) => ({
       ...current,
       versionHistory: [
-        createVersionSnapshot({
-          job: current.job,
-          outputs: current.outputs,
-          analysis: current.analysis
-        }),
+        createVersionSnapshot({ job: current.job, outputs: current.outputs, analysis: current.analysis }),
         ...current.versionHistory
       ]
     }));
   };
 
   const exportPack = () => {
-    appLog("export:start", {
-      title: state.job.title,
-      company: state.job.company,
-      hasAnalysis: Boolean(state.analysis)
-    });
-    const content = buildApplicationPack({
-      job: state.job,
-      outputs: state.outputs,
-      analysis: state.analysis
-    });
+    const content = buildApplicationPack({ job: state.job, outputs: state.outputs, analysis: state.analysis });
     const safeTitle = (state.job.title || "application-pack").toLowerCase().replace(/\s+/g, "-");
     downloadTextFile(`${safeTitle}-application-pack.txt`, content);
   };
@@ -555,7 +663,6 @@ export default function App() {
   };
 
   const useSampleResume = () => {
-    appLog("sample:resume");
     updateState((current) => {
       const next = ensureAnalysis({
         ...current,
@@ -582,9 +689,125 @@ export default function App() {
     }));
   };
 
+  // Application CRUD
+  const openApplication = (appId) => {
+    const app = applications.find((a) => a.id === appId);
+    if (!app) return;
+    const initial = createInitialState();
+    setState((current) => ({
+      ...current,
+      job: app.job || initial.job,
+      resume: app.resume || initial.resume,
+      analysis: app.analysis || null,
+      followUpAnswers: app.followUpAnswers || {},
+      outputs: app.outputs || initial.outputs,
+      experienceBank: app.experienceBank || initial.experienceBank,
+      versionHistory: app.versionHistory || [],
+      currentStep: app.currentStep || "job",
+      suggestions: []
+    }));
+    setCurrentApplicationId(appId);
+  };
+
+  const createApplication = async () => {
+    if (!state.user?.uid || applications.length >= 10) return;
+    try {
+      const initial = createInitialState();
+      const appRef = await addDoc(
+        collection(db, "users", state.user.uid, "applications"),
+        {
+          ...sanitize({
+            job: initial.job,
+            resume: initial.resume,
+            analysis: null,
+            followUpAnswers: {},
+            outputs: initial.outputs,
+            experienceBank: initial.experienceBank,
+            versionHistory: [],
+            currentStep: "job"
+          }),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        }
+      );
+      setState((current) => ({
+        ...current,
+        ...initial,
+        user: current.user,
+        suggestions: []
+      }));
+      setCurrentApplicationId(appRef.id);
+    } catch (err) {
+      console.error("[App] create application error:", err);
+    }
+  };
+
+  const deleteApplication = async (appId) => {
+    if (!state.user?.uid) return;
+    try {
+      await deleteDoc(doc(db, "users", state.user.uid, "applications", appId));
+    } catch (err) {
+      console.error("[App] delete application error:", err);
+    }
+  };
+
+  const exitToDashboard = () => {
+    setCurrentApplicationId(null);
+    setState((current) => ({ ...createInitialState(), user: current.user }));
+  };
+
+  const handleSignOut = async () => {
+    await signOut(auth);
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!window.confirm("Delete your account and all applications? This cannot be undone.")) return;
+    const uid = state.user.uid;
+    try {
+      const appsSnap = await getDocs(collection(db, "users", uid, "applications"));
+      await Promise.all(appsSnap.docs.map((d) => deleteDoc(d.ref)));
+      await deleteDoc(doc(db, "users", uid));
+      await auth.currentUser.delete();
+    } catch (err) {
+      console.error("[App] delete account error:", err);
+      if (err.code === "auth/requires-recent-login") {
+        alert("For security, please sign out and sign back in before deleting your account.");
+      } else {
+        alert("Failed to delete account. Please try again.");
+      }
+    }
+  };
+
+  // --- Render ---
+
+  if (authLoading) {
+    return (
+      <div style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>
+        <p style={{ color: "var(--muted)" }}>Loading…</p>
+      </div>
+    );
+  }
+
   if (!state.user) {
-    appLog("render:auth-screen");
-    return <AuthScreen onSignIn={signIn} darkMode={darkMode} onToggleDark={toggleDark} />;
+    return <AuthScreen darkMode={darkMode} onToggleDark={toggleDark} />;
+  }
+
+  if (!currentApplicationId) {
+    return (
+      <Dashboard
+        user={state.user}
+        applications={applications}
+        onCreate={createApplication}
+        onOpen={openApplication}
+        onDelete={deleteApplication}
+        onSignOut={handleSignOut}
+        onDeleteAccount={handleDeleteAccount}
+        darkMode={darkMode}
+        onToggleDark={toggleDark}
+        showAccount={showAccount}
+        onToggleAccount={() => setShowAccount((s) => !s)}
+      />
+    );
   }
 
   appLog("render:app", {
@@ -598,6 +821,7 @@ export default function App() {
       <StepRail
         state={state}
         onStepChange={(stepId) => updateState((current) => ({ ...current, currentStep: stepId }))}
+        onBack={exitToDashboard}
         darkMode={darkMode}
         onToggleDark={toggleDark}
       />
@@ -648,10 +872,7 @@ export default function App() {
                   onChange={(event) =>
                     updateState((current) => ({
                       ...current,
-                      job: {
-                        ...current.job,
-                        url: event.target.value
-                      }
+                      job: { ...current.job, url: event.target.value }
                     }))
                   }
                 />
@@ -681,10 +902,7 @@ export default function App() {
                 onChange={(event) =>
                   updateState((current) => ({
                     ...current,
-                    job: {
-                      ...current.job,
-                      description: event.target.value
-                    }
+                    job: { ...current.job, description: event.target.value }
                   }))
                 }
               />
@@ -724,10 +942,7 @@ export default function App() {
                   onChange={(event) =>
                     updateState((current) => ({
                       ...current,
-                      resume: {
-                        ...current.resume,
-                        rawText: event.target.value
-                      }
+                      resume: { ...current.resume, rawText: event.target.value }
                     }))
                   }
                 />
@@ -767,12 +982,22 @@ export default function App() {
             </button>
           </div>
           {isAnalyzing && (
-            <div className="empty-state" style={{ marginBottom: "0.75rem", borderStyle: "solid", borderColor: "var(--accent)", color: "var(--accent-strong)" }}>
+            <div
+              className="empty-state"
+              style={{
+                marginBottom: "0.75rem",
+                borderStyle: "solid",
+                borderColor: "var(--accent)",
+                color: "var(--accent-strong)"
+              }}
+            >
               Analyzing with AI — semantic match in progress...
             </div>
           )}
           {!state.analysis ? (
-            <div className="empty-state">Complete the job and resume steps to generate an analysis.</div>
+            <div className="empty-state">
+              Complete the job and resume steps to generate an analysis.
+            </div>
           ) : (
             <>
               <div className="metric-grid">
@@ -784,7 +1009,8 @@ export default function App() {
                 <div className="score-card">
                   <span>Requirements met</span>
                   <strong>
-                    {state.analysis.requirements?.filter((r) => r.met).length ?? "—"} of {state.analysis.requirements?.length ?? "—"}
+                    {state.analysis.requirements?.filter((r) => r.met).length ?? "—"} of{" "}
+                    {state.analysis.requirements?.length ?? "—"}
                   </strong>
                 </div>
                 <div className="score-card">
@@ -802,11 +1028,16 @@ export default function App() {
                   <h3>Role requirements</h3>
                   <ul className="requirement-list">
                     {state.analysis.requirements.map((req, i) => (
-                      <li key={i} className={`requirement-item ${req.met ? "requirement-met" : "requirement-unmet"}`}>
+                      <li
+                        key={i}
+                        className={`requirement-item ${req.met ? "requirement-met" : "requirement-unmet"}`}
+                      >
                         <span className="requirement-badge">{req.label || req.category}</span>
                         <span className="requirement-text">
                           {req.text}
-                          {req.evidence && <em className="requirement-evidence"> — {req.evidence}</em>}
+                          {req.evidence && (
+                            <em className="requirement-evidence"> — {req.evidence}</em>
+                          )}
                         </span>
                         <span className="requirement-status">{req.met ? "✓ met" : "✗ gap"}</span>
                       </li>
@@ -817,12 +1048,17 @@ export default function App() {
               <div className="comparison-grid">
                 <div className="subtle-card">
                   <h3>Strengths</h3>
-                  <ListOrFallback items={state.analysis.strengths} fallback="No strengths surfaced yet." />
+                  <ListOrFallback
+                    items={state.analysis.strengths}
+                    fallback="No strengths surfaced yet."
+                  />
                 </div>
                 <div className="subtle-card">
                   <h3>Evidence gaps</h3>
                   <ListOrFallback
-                    items={state.analysis.gaps.map((gap) => gap.detail || `${gap.keyword}: ${gap.prompt}`)}
+                    items={state.analysis.gaps.map(
+                      (gap) => gap.detail || `${gap.keyword}: ${gap.prompt}`
+                    )}
                     fallback="No major gaps detected."
                   />
                 </div>
@@ -839,7 +1075,9 @@ export default function App() {
             </div>
           </div>
           {!state.analysis?.gaps?.length ? (
-            <div className="empty-state">No follow-up questions yet. Generate an analysis first.</div>
+            <div className="empty-state">
+              No follow-up questions yet. Generate an analysis first.
+            </div>
           ) : (
             <div className="followup-list">
               {state.analysis.gaps.map((gap) => (
@@ -849,7 +1087,11 @@ export default function App() {
                       <p className="eyebrow">{gap.type.replace("-", " ")}</p>
                       <h3>{gap.keyword}</h3>
                     </div>
-                    <button className="ghost" type="button" onClick={() => approveExperience(gap.keyword)}>
+                    <button
+                      className="ghost"
+                      type="button"
+                      onClick={() => approveExperience(gap.keyword)}
+                    >
                       Save to experience bank
                     </button>
                   </div>
@@ -967,7 +1209,9 @@ export default function App() {
                 </article>
               ))
             ) : (
-              <div className="empty-state">Saved resume and cover letter versions will appear here.</div>
+              <div className="empty-state">
+                Saved resume and cover letter versions will appear here.
+              </div>
             )}
           </div>
         </PanelSection>
