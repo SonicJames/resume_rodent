@@ -599,7 +599,7 @@ export default function App() {
               <span>Saved stories</span>
               <strong>{state.experienceBank.length}</strong>
             </div>
-            <button className="ghost" type="button" onClick={handleClear}>
+            <button className="ghost hero-clear" type="button" onClick={handleClear}>
               Clear job &amp; resume
             </button>
           </div>

@@ -714,20 +714,28 @@ ul {
 
   .hero-metrics {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.4rem;
     margin-bottom: 0;
   }
 
   .metric-card {
-    padding: 0.5rem 0.6rem;
+    padding: 0.35rem 0.5rem;
   }
 
   .metric-card span {
-    font-size: 0.7rem;
-    margin-bottom: 0.15rem;
+    font-size: 0.62rem;
+    margin-bottom: 0.1rem;
   }
 
   .metric-card strong {
-    font-size: 1rem;
+    font-size: 0.9rem;
+  }
+
+  .hero-clear {
+    grid-column: 1 / -1;
+    border-radius: var(--radius-sm);
+    padding: 0.45rem;
+    font-size: 0.82rem;
   }
 
   .panel {
