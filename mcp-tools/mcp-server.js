@@ -188,7 +188,7 @@ async function handleFindMeAJob(args) {
           `**[${num}] ${job.title}** at ${job.company}\n` +
           `📍 ${job.location}\n` +
           salaryLine +
-          `${job.summary}...\n` +
+          `📝 **About the role:** ${job.summary}...\n` +
           `💬 "Show me details for job ${num}" | 🎯 [Help Me Apply](${applyUrl})`
         );
       })
@@ -297,7 +297,7 @@ function handleFindMeAJobFallback(keywords, limit) {
       return (
         `**[${num}] ${job.title}** at ${job.company}\n` +
         `📍 ${job.location} | 💰 ${job.salary}\n` +
-        `${job.summary}\n` +
+        `📝 **About the role:** ${job.summary}\n` +
         `💬 "Show me details for job ${num}" | 🎯 [Help Me Apply](${applyUrl})`
       );
     })
