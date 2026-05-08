@@ -124,6 +124,103 @@ function createMcpServer() {
 // Ordered list of the last search so view_job_details can look up by number
 let lastSearchResults = [];
 
+function buildJobsReactArtifact(jobs, keywords) {
+  const jobsJson = JSON.stringify(jobs);
+  const appBase = JSON.stringify(RESUME_RODENT_APP);
+
+  return `
+Please render the following as a React artifact:
+
+\`\`\`jsx
+import { useState } from "react";
+
+const JOBS = ${jobsJson};
+const APP_BASE = ${appBase};
+
+function applyUrl(job) {
+  return APP_BASE + "?job_id=" + encodeURIComponent(job.id) + "&job_title=" + encodeURIComponent(job.title) + "&job_url=" + encodeURIComponent(job.url);
+}
+
+function JobCard({ job, num }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div style={{
+      background: "#1a1a2e", border: "1px solid #2d2d4e", borderRadius: 12,
+      padding: "18px 20px", marginBottom: 16, fontFamily: "system-ui, sans-serif"
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+        {job.logo && (
+          <img src={job.logo} alt={job.company} style={{ width: 40, height: 40, borderRadius: 6, objectFit: "contain", background: "#fff", padding: 3 }} />
+        )}
+        <div>
+          <div style={{ color: "#e2e8f0", fontWeight: 700, fontSize: 15 }}>
+            [{num}] {job.title}
+          </div>
+          <div style={{ color: "#94a3b8", fontSize: 13 }}>{job.company}</div>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+        <span style={{ background: "#0f3460", color: "#93c5fd", borderRadius: 20, padding: "2px 10px", fontSize: 12 }}>
+          📍 {job.location}
+        </span>
+        {job.salary && (
+          <span style={{ background: "#14532d", color: "#86efac", borderRadius: 20, padding: "2px 10px", fontSize: 12 }}>
+            💰 {job.salary}
+          </span>
+        )}
+      </div>
+      <p style={{ color: "#cbd5e1", fontSize: 13, lineHeight: 1.6, margin: "0 0 10px" }}>
+        {job.summary}{!expanded && job.fullDescription.length > job.summary.length ? "…" : ""}
+      </p>
+      {expanded && (
+        <p style={{ color: "#94a3b8", fontSize: 12, lineHeight: 1.7, margin: "0 0 10px", borderTop: "1px solid #2d2d4e", paddingTop: 10 }}>
+          {job.fullDescription}
+        </p>
+      )}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {job.fullDescription.length > job.summary.length && (
+          <button
+            onClick={() => setExpanded(!expanded)}
+            style={{
+              background: "transparent", border: "1px solid #4f46e5", color: "#818cf8",
+              borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer"
+            }}
+          >
+            {expanded ? "Hide description ▲" : "Show full description ▼"}
+          </button>
+        )}
+        <a
+          href={applyUrl(job)}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            background: "#4f46e5", color: "#fff", borderRadius: 6,
+            padding: "5px 14px", fontSize: 12, textDecoration: "none", fontWeight: 600
+          }}
+        >
+          🎯 Help Me Apply
+        </a>
+      </div>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <div style={{ background: "#0f0f1a", minHeight: "100vh", padding: "24px 20px", boxSizing: "border-box" }}>
+      <div style={{ maxWidth: 680, margin: "0 auto" }}>
+        <h2 style={{ color: "#e2e8f0", fontFamily: "system-ui, sans-serif", marginBottom: 20, fontSize: 18 }}>
+          🐭 Resume Rodent — {JOBS.length} job{JOBS.length !== 1 ? "s" : ""} found
+        </h2>
+        {JOBS.map((job, i) => <JobCard key={job.id} job={job} num={i + 1} />)}
+      </div>
+    </div>
+  );
+}
+\`\`\`
+`.trim();
+}
+
 async function handleFindMeAJob(args) {
   const { keywords = "", limit = 10 } = args;
 
@@ -176,29 +273,8 @@ async function handleFindMeAJob(args) {
     cacheJobs(jobs);
     lastSearchResults = jobs;
 
-    const jobList = jobs
-      .map((job, idx) => {
-        const num = idx + 1;
-        const logoLine = job.logo ? `![${job.company} logo](${job.logo})\n` : "";
-        const salaryLine = job.salary ? `💰 ${job.salary}\n` : "";
-        const applyUrl = RESUME_RODENT_APP + "?job_id=" + encodeURIComponent(job.id) + "&job_title=" + encodeURIComponent(job.title) + "&job_url=" + encodeURIComponent(job.url);
-
-        return (
-          logoLine +
-          `**[${num}] ${job.title}** at ${job.company}\n` +
-          `📍 ${job.location}\n` +
-          salaryLine +
-          `📝 **About the role:** ${job.summary}...\n` +
-          `💬 "Show me details for job ${num}" | 🎯 [Help Me Apply](${applyUrl})`
-        );
-      })
-      .join("\n\n---\n\n");
-
     return {
-      content: [{
-        type: "text",
-        text: `Display all ${jobs.length} job listings below to the user in full — do not summarise or skip any fields:\n\n${jobList}\n\n---\nAsk me to **show details** for any job to read the full description, or click **Help Me Apply** to tailor your resume.`
-      }]
+      content: [{ type: "text", text: buildJobsReactArtifact(jobs, keywords) }]
     };
   } catch (error) {
     return handleFindMeAJobFallback(keywords, limit);
@@ -246,7 +322,7 @@ function handleFindMeAJobFallback(keywords, limit) {
       logo: null,
       url: "https://jobs.example.com/job-1",
       summary: "Lead product marketing for AI workflow tools. 5+ years B2B SaaS experience required.",
-      fullDescription: "Lead product marketing for AI workflow tools. 5+ years B2B SaaS experience required. You will work cross-functionally with product, sales, and customer success to drive go-to-market strategy."
+      fullDescription: "Lead product marketing for AI workflow tools. 5+ years B2B SaaS experience required. You will work cross-functionally with product, sales, and customer success to drive go-to-market strategy. The ideal candidate has experience positioning complex products for enterprise buyers and a track record of successful launches."
     },
     {
       id: "job-2",
@@ -257,7 +333,7 @@ function handleFindMeAJobFallback(keywords, limit) {
       logo: null,
       url: "https://jobs.example.com/job-2",
       summary: "Build developer-first tools with a team of engineers. Strong product sense and cross-functional skills needed.",
-      fullDescription: "Build developer-first tools with a team of engineers. Strong product sense and cross-functional skills needed. You will own the full product lifecycle from discovery through launch."
+      fullDescription: "Build developer-first tools with a team of engineers. Strong product sense and cross-functional skills needed. You will own the full product lifecycle from discovery through launch. Deep empathy for developer workflows is essential. Experience with API products or CLI tooling preferred."
     },
     {
       id: "job-3",
@@ -268,7 +344,7 @@ function handleFindMeAJobFallback(keywords, limit) {
       logo: null,
       url: "https://jobs.example.com/job-3",
       summary: "Shape brand narrative and support go-to-market efforts. 4+ years content strategy experience.",
-      fullDescription: "Shape brand narrative and support go-to-market efforts. 4+ years content strategy experience. You will produce thought leadership content, manage editorial calendar, and collaborate with design."
+      fullDescription: "Shape brand narrative and support go-to-market efforts. 4+ years content strategy experience required. You will produce thought leadership content, manage the editorial calendar, and collaborate closely with design and demand generation teams to drive pipeline."
     }
   ];
 
@@ -290,24 +366,8 @@ function handleFindMeAJobFallback(keywords, limit) {
   lastSearchResults = filtered;
   cacheJobs(filtered);
 
-  const jobList = filtered
-    .map((job, idx) => {
-      const num = idx + 1;
-      const applyUrl = RESUME_RODENT_APP + "?job_id=" + encodeURIComponent(job.id) + "&job_title=" + encodeURIComponent(job.title) + "&job_url=" + encodeURIComponent(job.url);
-      return (
-        `**[${num}] ${job.title}** at ${job.company}\n` +
-        `📍 ${job.location} | 💰 ${job.salary}\n` +
-        `📝 **About the role:** ${job.summary}\n` +
-        `💬 "Show me details for job ${num}" | 🎯 [Help Me Apply](${applyUrl})`
-      );
-    })
-    .join("\n\n---\n\n");
-
   return {
-    content: [{
-      type: "text",
-      text: `Found ${filtered.length} sample job(s) matching "${keywords}":\n\n${jobList}\n\n---\nAsk me to **show details** for any job or click **Help Me Apply** to get started.`
-    }]
+    content: [{ type: "text", text: buildJobsReactArtifact(filtered, keywords) }]
   };
 }
 
