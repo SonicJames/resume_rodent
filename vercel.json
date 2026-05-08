@@ -2,8 +2,9 @@
   "cleanUrls": true,
   "trailingSlash": false,
   "functions": {
-    "api/job-chat.js": {
-      "maxDuration": 30
-    }
+    "api/job-chat.js": { "maxDuration": 30 },
+    "api/exchange.js": { "maxDuration": 30 },
+    "api/chat.js": { "maxDuration": 30 },
+    "api/export.js": { "maxDuration": 30 }
   }
 }
