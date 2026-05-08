@@ -89,6 +89,13 @@ function createMcpServer() {
         uri: "ui://widgets/job-board.html",
         mimeType: RESOURCE_MIME_TYPE,
         text: widgetHtml,
+        _meta: {
+          ui: {
+            csp: {
+              frameDomains: ["https://resume-rodent.vercel.app"],
+            },
+          },
+        },
       }],
     }),
   );
