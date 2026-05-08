@@ -193,7 +193,7 @@ function createMcpServer() {
     },
   );
 
-  // help_me_apply
+  // help_me_apply — called by Claude when user wants to apply; widget handles the rest
   server.tool(
     "help_me_apply",
     "Start the Resume Rodent application helper. Select a job from find_me_a_job results, upload your resume, and get personalized guidance to refine it for that role.",
@@ -220,6 +220,89 @@ function createMcpServer() {
             `4. Download your tailored PDF and submit\n\n[🚀 Open Resume Rodent](${appUrl.toString()})`,
         }],
       };
+    },
+  );
+
+  // analyze_resume — called directly by the widget via callServerTool; hidden from Claude
+  registerAppTool(
+    server,
+    "analyze_resume",
+    {
+      description: "Analyze a resume against a job posting and return coaching feedback. Called by the job board widget.",
+      annotations: { title: "Analyze Resume", readOnlyHint: true },
+      inputSchema: {
+        jobTitle: z.string(),
+        jobDescription: z.string(),
+        jobUrl: z.string().optional(),
+        resumeText: z.string(),
+      },
+      _meta: {
+        ui: {
+          resourceUri: "ui://widgets/job-board.html",
+          visibility: ["app"],
+        },
+      },
+    },
+    async ({ jobTitle, jobDescription, jobUrl, resumeText }) => {
+      try {
+        const response = await fetch(RESUME_RODENT_APP + "/api/exchange", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jobUrl: jobUrl || "",
+            jobDescription: "Job Title: " + jobTitle + "\n\n" + jobDescription,
+            resumeText,
+          }),
+          signal: AbortSignal.timeout(28000),
+        });
+        if (!response.ok) throw new Error("exchange api " + response.status);
+        const data = await response.json();
+        return { content: [{ type: "text", text: data.assistant || "Analysis complete." }] };
+      } catch (err) {
+        return { content: [{ type: "text", text: "Analysis failed: " + err.message }], isError: true };
+      }
+    },
+  );
+
+  // chat_on_resume — follow-up chat, called by widget via callServerTool; hidden from Claude
+  registerAppTool(
+    server,
+    "chat_on_resume",
+    {
+      description: "Continue a resume coaching conversation. Called by the job board widget.",
+      annotations: { title: "Chat on Resume", readOnlyHint: true },
+      inputSchema: {
+        jobUrl: z.string().optional(),
+        jobDescription: z.string(),
+        resumeText: z.string(),
+        conversation: z.array(z.object({ role: z.string(), content: z.string() })),
+      },
+      _meta: {
+        ui: {
+          resourceUri: "ui://widgets/job-board.html",
+          visibility: ["app"],
+        },
+      },
+    },
+    async ({ jobUrl, jobDescription, resumeText, conversation }) => {
+      try {
+        const response = await fetch(RESUME_RODENT_APP + "/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jobUrl: jobUrl || "",
+            jobDescription,
+            resumeText,
+            conversation: conversation.map(m => ({ role: m.role, content: m.content })),
+          }),
+          signal: AbortSignal.timeout(28000),
+        });
+        if (!response.ok) throw new Error("chat api " + response.status);
+        const data = await response.json();
+        return { content: [{ type: "text", text: data.assistant || "" }] };
+      } catch (err) {
+        return { content: [{ type: "text", text: "Chat failed: " + err.message }], isError: true };
+      }
     },
   );
 
