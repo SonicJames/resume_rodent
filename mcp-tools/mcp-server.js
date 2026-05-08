@@ -11,7 +11,7 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const SONIC_JOBS_SERVER = process.env.SONIC_JOBS_MCP_URL || null;
+const SONIC_JOBS_MCP_URL = process.env.SONICJOBS_MCP_URL || null;
 const RESUME_RODENT_APP = process.env.RESUME_RODENT_APP_URL || "http://localhost:4000";
 
 function createMcpServer() {
@@ -90,40 +90,65 @@ function createMcpServer() {
 async function handleFindMeAJob(args) {
   const { keywords = "", limit = 10 } = args;
 
-  if (!SONIC_JOBS_SERVER) {
+  if (!SONIC_JOBS_MCP_URL) {
     return handleFindMeAJobFallback(keywords, limit);
   }
 
   try {
-    const response = await fetch(`${SONIC_JOBS_SERVER}/search`, {
+    // Send initialized notification (required by MCP protocol before tool calls)
+    await fetch(SONIC_JOBS_MCP_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ keywords, limit })
+      headers: { "Content-Type": "application/json", "Accept": "application/json, text/event-stream" },
+      body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized", params: {} }),
+      signal: AbortSignal.timeout(5000)
+    }).catch(() => {});
+
+    const response = await fetch(SONIC_JOBS_MCP_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json, text/event-stream" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: Date.now(),
+        method: "tools/call",
+        params: { name: "job-search", arguments: { role: [keywords], page: 1 } }
+      }),
+      signal: AbortSignal.timeout(25000)
     });
 
-    if (!response.ok) {
-      return handleFindMeAJobFallback(keywords, limit);
-    }
+    const text = await response.text();
+    const dataMatch = text.match(/^data:\s*(.+)$/m);
+    if (!dataMatch) return handleFindMeAJobFallback(keywords, limit);
 
-    const data = await response.json();
-    const jobs = data.jobs || [];
+    const parsed = JSON.parse(dataMatch[1]);
+    if (parsed.error) return handleFindMeAJobFallback(keywords, limit);
 
-    if (jobs.length === 0) {
+    const rawJobs = (parsed.result?._meta?.jobs || []).slice(0, limit);
+
+    if (rawJobs.length === 0) {
       return {
         content: [{
           type: "text",
-          text: `No jobs found matching "${keywords}" on SonicJobs. Try different keywords or browse all positions.`
+          text: `No jobs found matching "${keywords}" on SonicJobs. Try different keywords.`
         }]
       };
     }
 
+    const jobs = rawJobs.map((job) => ({
+      id: job.id,
+      title: job.title,
+      company: job.companyName,
+      location: [job.address?.city, job.address?.state].filter(Boolean).join(", ") || "Remote",
+      url: job.redirectUrl || job.url || "",
+      description: (job.htmlJobDescription || job.description || "")
+        .replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 150)
+    }));
+
     const jobList = jobs
-      .map(
-        (job, idx) =>
-          `**[${idx + 1}] ${job.title}** at ${job.company}\n` +
-          `📍 ${job.location || "Remote"} | 💼 ${job.type || "Full-time"}\n` +
-          `${job.description?.substring(0, 150)}...\n` +
-          `🔗 [View Job](${job.url}) | 🎯 [Help Me Apply](${RESUME_RODENT_APP}?job_id=${job.id}&job_title=${encodeURIComponent(job.title)}&job_url=${encodeURIComponent(job.url)})`
+      .map((job, idx) =>
+        `**[${idx + 1}] ${job.title}** at ${job.company}\n` +
+        `📍 ${job.location}\n` +
+        `${job.description}...\n` +
+        `🔗 [View Job](${job.url}) | 🎯 [Help Me Apply](${RESUME_RODENT_APP}?job_id=${encodeURIComponent(job.id)}&job_title=${encodeURIComponent(job.title)}&job_url=${encodeURIComponent(job.url)})`
       )
       .join("\n\n");
 
