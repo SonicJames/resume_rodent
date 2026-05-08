@@ -11,7 +11,7 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const SONIC_JOBS_SERVER = process.env.SONIC_JOBS_MCP_URL || "http://localhost:3000";
+const SONIC_JOBS_SERVER = process.env.SONIC_JOBS_MCP_URL || null;
 const RESUME_RODENT_APP = process.env.RESUME_RODENT_APP_URL || "http://localhost:4000";
 
 function createMcpServer() {
@@ -89,6 +89,10 @@ function createMcpServer() {
 
 async function handleFindMeAJob(args) {
   const { keywords = "", limit = 10 } = args;
+
+  if (!SONIC_JOBS_SERVER) {
+    return handleFindMeAJobFallback(keywords, limit);
+  }
 
   try {
     const response = await fetch(`${SONIC_JOBS_SERVER}/search`, {
