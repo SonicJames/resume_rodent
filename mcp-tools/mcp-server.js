@@ -148,7 +148,7 @@ async function handleFindMeAJob(args) {
         `**[${idx + 1}] ${job.title}** at ${job.company}\n` +
         `📍 ${job.location}\n` +
         `${job.description}...\n` +
-        `🔗 [View Job](${job.url}) | 🎯 [Help Me Apply](${RESUME_RODENT_APP}?job_id=${encodeURIComponent(job.id)}&job_title=${encodeURIComponent(job.title)}&job_url=${encodeURIComponent(job.url)})`
+        `🔗 [View Job](${job.url}) | 🎯 [Help Me Apply](${RESUME_RODENT_APP.trim()}?job_id=${encodeURIComponent(job.id)}&job_title=${encodeURIComponent(job.title)}&job_url=${encodeURIComponent(job.url)})`
       )
       .join("\n\n");
 
