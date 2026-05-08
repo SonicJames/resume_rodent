@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Resume Rodent Claude MCP</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <header>
+        <h1>Resume Rodent Claude MCP</h1>
+        <p>Upload a resume and job URL, then chat to fill gaps and export a PDF.</p>
+      </header>
+
+      <section class="card" id="build-section">
+        <form id="job-form" class="stack">
+          <div class="sample-actions">
+            <button type="button" id="load-sample" class="secondary">Load sample job + resume</button>
+            <p class="hint">Quickly populate the form with a test job and resume example.</p>
+          </div>
+          <label>
+            Job URL
+            <input name="jobUrl" type="url" placeholder="https://..." />
+          </label>
+          <label>
+            Job description (optional)
+            <textarea name="jobDescription" rows="4" placeholder="Paste the job posting or key role details"></textarea>
+          </label>
+          <label>
+            Resume file
+            <input name="resumeFile" type="file" accept=".txt,.md,.docx,.pdf" />
+          </label>
+          <label>
+            Resume text (optional if you upload a file)
+            <textarea name="resumeText" rows="8" placeholder="Paste resume text here if you don't want to upload a file"></textarea>
+          </label>
+          <button type="submit" class="primary">Start analysis</button>
+        </form>
+      </section>
+
+      <section class="card hidden" id="chat-section">
+        <div class="chat-box" id="chat"></div>
+
+        <form id="chat-form" class="chat-input">
+          <input name="message" type="text" placeholder="Reply or answer the follow-up request" required />
+          <button type="submit">Send</button>
+        </form>
+
+        <div class="actions">
+          <button id="export-btn" class="secondary">Export PDF resume</button>
+          <p class="hint">After the chat yields enough evidence, export a tailored PDF.</p>
+        </div>
+      </section>
+
+      <section class="card hidden" id="status-section">
+        <h2>Status</h2>
+        <pre id="status-log">Ready to start.</pre>
+      </section>
+    </main>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

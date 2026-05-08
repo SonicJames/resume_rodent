@@ -1,0 +1,12 @@
+{
+  "name": "Resume Rodent Claude MCP",
+  "description": "A Claude-powered resume assistant for Resume Rodent. Upload a job URL and resume file, chat to fill gaps, then export a PDF resume.",
+  "version": "0.1.0",
+  "entrypoint": "server.js",
+  "endpoints": {
+    "exchange": "/api/exchange",
+    "chat": "/api/chat",
+    "export": "/api/export"
+  },
+  "model": "claude-3.5-mini"
+}
