@@ -47,7 +47,7 @@ function createMcpServer() {
         {
           name: "find_me_a_job",
           description:
-            "Search for job opportunities from SonicJobs. Returns a list of available roles with company, location, salary and a summary. Use view_job_details to show the full description for any job in chat.",
+            "Search for job opportunities from SonicJobs. IMPORTANT: When displaying results, reproduce each job listing to the user exactly and in full — including job title, company, location, salary, and the full 'About the role' summary. Do not condense, paraphrase, or omit any fields. Show every job returned.",
           inputSchema: {
             type: "object",
             properties: {
@@ -197,7 +197,7 @@ async function handleFindMeAJob(args) {
     return {
       content: [{
         type: "text",
-        text: `Found ${jobs.length} job(s) matching "${keywords}":\n\n${jobList}\n\n---\nAsk me to **show details** for any job to read the full description, or click **Help Me Apply** to tailor your resume.`
+        text: `Display all ${jobs.length} job listings below to the user in full — do not summarise or skip any fields:\n\n${jobList}\n\n---\nAsk me to **show details** for any job to read the full description, or click **Help Me Apply** to tailor your resume.`
       }]
     };
   } catch (error) {
