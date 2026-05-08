@@ -12,7 +12,28 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const SONIC_JOBS_MCP_URL = process.env.SONICJOBS_MCP_URL || null;
-const RESUME_RODENT_APP = process.env.RESUME_RODENT_APP_URL || "http://localhost:4000";
+const RESUME_RODENT_APP = (process.env.RESUME_RODENT_APP_URL || "http://localhost:4000").trim();
+
+// In-memory cache of job details keyed by job ID.
+// Railway runs a persistent process so this survives between requests.
+const jobCache = new Map();
+
+function cacheJobs(jobs) {
+  jobs.forEach((job) => jobCache.set(job.id, job));
+  // Prevent unbounded growth
+  if (jobCache.size > 200) {
+    const overflow = jobCache.size - 200;
+    let i = 0;
+    for (const key of jobCache.keys()) {
+      if (i++ >= overflow) break;
+      jobCache.delete(key);
+    }
+  }
+}
+
+function stripHtml(html) {
+  return (html || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
 
 function createMcpServer() {
   const server = new Server(
@@ -26,7 +47,7 @@ function createMcpServer() {
         {
           name: "find_me_a_job",
           description:
-            "Search for job opportunities from SonicJobs. Returns a list of available roles. Each job can be selected to apply directly or use Resume Rodent to refine your resume first.",
+            "Search for job opportunities from SonicJobs. Returns a list of available roles with company, location, salary and a summary. Use view_job_details to show the full description for any job in chat.",
           inputSchema: {
             type: "object",
             properties: {
@@ -43,9 +64,24 @@ function createMcpServer() {
           }
         },
         {
+          name: "view_job_details",
+          description:
+            "Show the full job description for a specific job from the most recent find_me_a_job search, displayed inline in the chat.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              job_number: {
+                type: "number",
+                description: "The job number from the search results (e.g., 1 for the first result)"
+              }
+            },
+            required: ["job_number"]
+          }
+        },
+        {
           name: "help_me_apply",
           description:
-            "Start the Resume Rodent application helper. Select a job from find_me_a_job results, upload your resume, and get personalized guidance to refine it for that role. Returns a link to the Resume Rodent app where you can complete the process.",
+            "Start the Resume Rodent application helper. Select a job from find_me_a_job results, upload your resume, and get personalized guidance to refine it for that role.",
           inputSchema: {
             type: "object",
             properties: {
@@ -72,30 +108,28 @@ function createMcpServer() {
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
-    if (name === "find_me_a_job") {
-      return await handleFindMeAJob(args);
-    } else if (name === "help_me_apply") {
-      return handleHelpMeApply(args);
-    } else {
-      return {
-        content: [{ type: "text", text: `Unknown tool: ${name}` }],
-        isError: true
-      };
-    }
+    if (name === "find_me_a_job") return await handleFindMeAJob(args);
+    if (name === "view_job_details") return handleViewJobDetails(args);
+    if (name === "help_me_apply") return handleHelpMeApply(args);
+
+    return {
+      content: [{ type: "text", text: `Unknown tool: ${name}` }],
+      isError: true
+    };
   });
 
   return server;
 }
 
+// Ordered list of the last search so view_job_details can look up by number
+let lastSearchResults = [];
+
 async function handleFindMeAJob(args) {
   const { keywords = "", limit = 10 } = args;
 
-  if (!SONIC_JOBS_MCP_URL) {
-    return handleFindMeAJobFallback(keywords, limit);
-  }
+  if (!SONIC_JOBS_MCP_URL) return handleFindMeAJobFallback(keywords, limit);
 
   try {
-    // Send initialized notification (required by MCP protocol before tool calls)
     await fetch(SONIC_JOBS_MCP_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Accept": "application/json, text/event-stream" },
@@ -123,14 +157,8 @@ async function handleFindMeAJob(args) {
     if (parsed.error) return handleFindMeAJobFallback(keywords, limit);
 
     const rawJobs = (parsed.result?._meta?.jobs || []).slice(0, limit);
-
     if (rawJobs.length === 0) {
-      return {
-        content: [{
-          type: "text",
-          text: `No jobs found matching "${keywords}" on SonicJobs. Try different keywords.`
-        }]
-      };
+      return { content: [{ type: "text", text: `No jobs found matching "${keywords}". Try different keywords.` }] };
     }
 
     const jobs = rawJobs.map((job) => ({
@@ -138,29 +166,73 @@ async function handleFindMeAJob(args) {
       title: job.title,
       company: job.companyName,
       location: [job.address?.city, job.address?.state].filter(Boolean).join(", ") || "Remote",
+      salary: job.salaryDescription || null,
+      logo: job.companyLogo || job.logoUrl || job.companyLogoUrl || null,
       url: job.redirectUrl || job.url || "",
-      description: (job.htmlJobDescription || job.description || "")
-        .replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 150)
+      summary: stripHtml(job.htmlJobDescription || job.description || "").slice(0, 300),
+      fullDescription: stripHtml(job.htmlJobDescription || job.description || "")
     }));
 
+    cacheJobs(jobs);
+    lastSearchResults = jobs;
+
     const jobList = jobs
-      .map((job, idx) =>
-        `**[${idx + 1}] ${job.title}** at ${job.company}\n` +
-        `📍 ${job.location}\n` +
-        `${job.description}...\n` +
-        `🔗 [View Job](${job.url}) | 🎯 [Help Me Apply](${RESUME_RODENT_APP.trim()}?job_id=${encodeURIComponent(job.id)}&job_title=${encodeURIComponent(job.title)}&job_url=${encodeURIComponent(job.url)})`
-      )
-      .join("\n\n");
+      .map((job, idx) => {
+        const num = idx + 1;
+        const logoLine = job.logo ? `![${job.company} logo](${job.logo})\n` : "";
+        const salaryLine = job.salary ? `💰 ${job.salary}\n` : "";
+        const applyUrl = RESUME_RODENT_APP + "?job_id=" + encodeURIComponent(job.id) + "&job_title=" + encodeURIComponent(job.title) + "&job_url=" + encodeURIComponent(job.url);
+
+        return (
+          logoLine +
+          `**[${num}] ${job.title}** at ${job.company}\n` +
+          `📍 ${job.location}\n` +
+          salaryLine +
+          `${job.summary}...\n` +
+          `💬 "Show me details for job ${num}" | 🎯 [Help Me Apply](${applyUrl})`
+        );
+      })
+      .join("\n\n---\n\n");
 
     return {
       content: [{
         type: "text",
-        text: `Found ${jobs.length} job(s) matching "${keywords}" on SonicJobs:\n\n${jobList}\n\nClick **Help Me Apply** to use Resume Rodent and refine your resume for that role.`
+        text: `Found ${jobs.length} job(s) matching "${keywords}":\n\n${jobList}\n\n---\nAsk me to **show details** for any job to read the full description, or click **Help Me Apply** to tailor your resume.`
       }]
     };
   } catch (error) {
     return handleFindMeAJobFallback(keywords, limit);
   }
+}
+
+function handleViewJobDetails(args) {
+  const { job_number } = args;
+  const job = lastSearchResults[job_number - 1];
+
+  if (!job) {
+    return {
+      content: [{ type: "text", text: `No job #${job_number} found. Run a job search first.` }],
+      isError: true
+    };
+  }
+
+  const applyUrl = RESUME_RODENT_APP + "?job_id=" + encodeURIComponent(job.id) + "&job_title=" + encodeURIComponent(job.title) + "&job_url=" + encodeURIComponent(job.url);
+  const salaryLine = job.salary ? `**Salary:** ${job.salary}\n` : "";
+  const logoLine = job.logo ? `![${job.company} logo](${job.logo})\n\n` : "";
+
+  return {
+    content: [{
+      type: "text",
+      text: logoLine +
+        `## ${job.title}\n` +
+        `**Company:** ${job.company}\n` +
+        `**Location:** ${job.location}\n` +
+        salaryLine +
+        `\n---\n\n` +
+        job.fullDescription +
+        `\n\n---\n🎯 [Help Me Apply](${applyUrl})`
+    }]
+  };
 }
 
 function handleFindMeAJobFallback(keywords, limit) {
@@ -170,63 +242,71 @@ function handleFindMeAJobFallback(keywords, limit) {
       title: "Senior Product Marketing Manager",
       company: "Northstar AI",
       location: "San Francisco, CA",
-      type: "Full-time",
+      salary: "$130,000 - $160,000",
+      logo: null,
       url: "https://jobs.example.com/job-1",
-      description: "Lead product marketing for AI workflow tools. 5+ years B2B SaaS experience required."
+      summary: "Lead product marketing for AI workflow tools. 5+ years B2B SaaS experience required.",
+      fullDescription: "Lead product marketing for AI workflow tools. 5+ years B2B SaaS experience required. You will work cross-functionally with product, sales, and customer success to drive go-to-market strategy."
     },
     {
       id: "job-2",
       title: "Product Manager - Developer Tools",
       company: "TechFlow Inc",
       location: "Remote",
-      type: "Full-time",
+      salary: "$120,000 - $150,000",
+      logo: null,
       url: "https://jobs.example.com/job-2",
-      description: "Build developer-first tools with a team of engineers. Strong product sense and cross-functional skills needed."
+      summary: "Build developer-first tools with a team of engineers. Strong product sense and cross-functional skills needed.",
+      fullDescription: "Build developer-first tools with a team of engineers. Strong product sense and cross-functional skills needed. You will own the full product lifecycle from discovery through launch."
     },
     {
       id: "job-3",
       title: "Content Strategist",
       company: "CloudSoft",
       location: "New York, NY",
-      type: "Full-time",
+      salary: "$90,000 - $110,000",
+      logo: null,
       url: "https://jobs.example.com/job-3",
-      description: "Shape brand narrative and support go-to-market efforts. 4+ years content strategy experience."
+      summary: "Shape brand narrative and support go-to-market efforts. 4+ years content strategy experience.",
+      fullDescription: "Shape brand narrative and support go-to-market efforts. 4+ years content strategy experience. You will produce thought leadership content, manage editorial calendar, and collaborate with design."
     }
   ];
 
   const query = keywords.toLowerCase();
   const filtered = sampleJobs
-    .filter(
-      (job) =>
-        job.title.toLowerCase().includes(query) ||
-        job.company.toLowerCase().includes(query) ||
-        job.description.toLowerCase().includes(query)
+    .filter((job) =>
+      job.title.toLowerCase().includes(query) ||
+      job.company.toLowerCase().includes(query) ||
+      job.summary.toLowerCase().includes(query)
     )
     .slice(0, limit);
 
   if (filtered.length === 0) {
     return {
-      content: [{
-        type: "text",
-        text: `No jobs found matching "${keywords}". SonicJobs server may be unavailable. Try keywords like "product manager", "marketing", or a company name.`
-      }]
+      content: [{ type: "text", text: `No jobs found matching "${keywords}". Try keywords like "product manager", "marketing", or a company name.` }]
     };
   }
 
+  lastSearchResults = filtered;
+  cacheJobs(filtered);
+
   const jobList = filtered
-    .map(
-      (job, idx) =>
-        `**[${idx + 1}] ${job.title}** at ${job.company}\n` +
-        `📍 ${job.location} | 💼 ${job.type}\n` +
-        `${job.description}\n` +
-        `🔗 [View Job](${job.url}) | 🎯 [Help Me Apply](${RESUME_RODENT_APP}?job_id=${job.id}&job_title=${encodeURIComponent(job.title)}&job_url=${encodeURIComponent(job.url)})`
-    )
-    .join("\n\n");
+    .map((job, idx) => {
+      const num = idx + 1;
+      const applyUrl = RESUME_RODENT_APP + "?job_id=" + encodeURIComponent(job.id) + "&job_title=" + encodeURIComponent(job.title) + "&job_url=" + encodeURIComponent(job.url);
+      return (
+        `**[${num}] ${job.title}** at ${job.company}\n` +
+        `📍 ${job.location} | 💰 ${job.salary}\n` +
+        `${job.summary}\n` +
+        `💬 "Show me details for job ${num}" | 🎯 [Help Me Apply](${applyUrl})`
+      );
+    })
+    .join("\n\n---\n\n");
 
   return {
     content: [{
       type: "text",
-      text: `Found ${filtered.length} sample job(s) matching "${keywords}" (SonicJobs server unavailable):\n\n${jobList}\n\nClick **Help Me Apply** to open Resume Rodent and refine your resume for that role.`
+      text: `Found ${filtered.length} sample job(s) matching "${keywords}":\n\n${jobList}\n\n---\nAsk me to **show details** for any job or click **Help Me Apply** to get started.`
     }]
   };
 }
@@ -236,10 +316,7 @@ function handleHelpMeApply(args) {
 
   if (!jobTitle || !jobUrl) {
     return {
-      content: [{
-        type: "text",
-        text: "Please select a job from find_me_a_job results to begin Resume Rodent application helper."
-      }],
+      content: [{ type: "text", text: "Please select a job from find_me_a_job results to begin." }],
       isError: true
     };
   }
@@ -247,35 +324,12 @@ function handleHelpMeApply(args) {
   const appUrl = new URL(RESUME_RODENT_APP);
   appUrl.searchParams.set("job_title", jobTitle);
   appUrl.searchParams.set("job_url", jobUrl);
-  if (resumeText) {
-    appUrl.searchParams.set("resume_text", resumeText.substring(0, 5000));
-  }
+  if (resumeText) appUrl.searchParams.set("resume_text", resumeText.substring(0, 5000));
 
   return {
     content: [{
       type: "text",
-      text: `
-🎯 Resume Rodent - Application Helper
-
-**Job:** ${jobTitle}
-**URL:** ${jobUrl}
-
-### Next Steps:
-
-1. Click the link below to open Resume Rodent
-2. Upload or paste your resume
-3. Answer follow-up questions to fill gaps
-4. Get a tailored, ATS-friendly resume
-5. Download and submit!
-
-[🚀 Open Resume Rodent](${appUrl.toString()})
-
-Resume Rodent will guide you through:
-- Analyzing your resume against job requirements
-- Identifying missing keywords and experience gaps
-- Asking targeted questions to gather evidence
-- Generating a tailored resume PDF ready to submit
-`
+      text: `🎯 **Resume Rodent — Application Helper**\n\n**Job:** ${jobTitle}\n\n**Next steps:**\n1. Click the link below to open Resume Rodent\n2. Upload or paste your resume\n3. Answer follow-up questions to fill gaps\n4. Download your tailored PDF and submit\n\n[🚀 Open Resume Rodent](${appUrl.toString()})`
     }]
   };
 }
@@ -285,7 +339,6 @@ Resume Rodent will guide you through:
 const app = express();
 app.use(express.json());
 
-// All MCP traffic goes through /mcp — stateless mode (no session management)
 app.all("/mcp", async (req, res) => {
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
   const server = createMcpServer();
