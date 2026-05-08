@@ -1,0 +1,134 @@
+<!doctype html>
+<meta charset="utf-8" />
+<meta name="color-scheme" content="light dark" />
+<style>
+  :root {
+    --bg: #0f0f1a;
+    --card: #1a1a2e;
+    --border: #2d2d4e;
+    --text: #e2e8f0;
+    --sub: #94a3b8;
+    --body: #cbd5e1;
+    --loc-bg: #0f3460;
+    --loc-fg: #93c5fd;
+    --sal-bg: #14532d;
+    --sal-fg: #86efac;
+    --accent: #4f46e5;
+    --accent-text: #818cf8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, sans-serif; font-size: 14px; }
+  body { padding: 12px 14px; }
+  h1 { font-size: 15px; font-weight: 700; margin-bottom: 12px; color: var(--text); }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; }
+  .card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .logo { width: 36px; height: 36px; border-radius: 5px; object-fit: contain; background: #fff; padding: 2px; flex-shrink: 0; }
+  .logo-init { width: 36px; height: 36px; border-radius: 5px; background: var(--border); color: var(--sub); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; flex-shrink: 0; }
+  .title { font-weight: 700; font-size: 14px; color: var(--text); line-height: 1.3; }
+  .company { font-size: 12px; color: var(--sub); margin-top: 2px; }
+  .badges { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  .badge { border-radius: 20px; padding: 2px 9px; font-size: 11px; }
+  .badge-loc { background: var(--loc-bg); color: var(--loc-fg); }
+  .badge-sal { background: var(--sal-bg); color: var(--sal-fg); }
+  .summary { color: var(--body); font-size: 13px; line-height: 1.55; margin-bottom: 8px; }
+  .full-desc { color: var(--sub); font-size: 12px; line-height: 1.65; border-top: 1px solid var(--border); padding-top: 8px; margin-bottom: 8px; display: none; white-space: pre-line; }
+  .full-desc.open { display: block; }
+  .actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .btn-toggle { background: transparent; border: 1px solid var(--accent); color: var(--accent-text); border-radius: 5px; padding: 4px 10px; font-size: 11px; cursor: pointer; }
+  .btn-apply { background: var(--accent); color: #fff; border-radius: 5px; padding: 4px 12px; font-size: 11px; font-weight: 600; cursor: pointer; border: none; }
+  .superseded { opacity: 0.4; pointer-events: none; }
+</style>
+<h1 id="heading">🐭 Resume Rodent</h1>
+<div id="board"></div>
+<script type="module">
+/*__EXT_APPS_BUNDLE__*/
+const { App, applyHostStyleVariables } = globalThis.ExtApps;
+
+let superseded = false;
+const seq = Date.now() + Math.random();
+const bc = new BroadcastChannel("rr-job-board");
+bc.addEventListener("message", (e) => {
+  if (e.data?.seq > seq) {
+    superseded = true;
+    document.body.classList.add("superseded");
+  }
+});
+bc.postMessage({ seq });
+
+const app = new App({ name: "JobBoard", version: "1.0.0" }, {}, { autoResize: true });
+
+app.onhostcontextchanged = (ctx) => {
+  document.documentElement.classList.toggle("dark", ctx?.theme === "dark");
+  if (ctx?.styles?.variables) applyHostStyleVariables(ctx.styles.variables);
+};
+
+app.ontoolresult = ({ content }) => {
+  const jobs = JSON.parse(content[0].text);
+  const board = document.getElementById("board");
+  document.getElementById("heading").textContent = "🐭 Resume Rodent — " + jobs.length + " job" + (jobs.length !== 1 ? "s" : "") + " found";
+  board.innerHTML = "";
+
+  jobs.forEach((job, i) => {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const logoHtml = job.logo
+      ? '<img class="logo" src="' + esc(job.logo) + '" alt="" referrerpolicy="no-referrer" onerror="this.replaceWith(initEl(\'' + esc(job.company) + '\'))">'
+      : initEl(job.company).outerHTML;
+
+    const salBadge = job.salary
+      ? '<span class="badge badge-sal">💰 ' + esc(job.salary) + '</span>'
+      : "";
+
+    const hasMore = job.fullDescription && job.fullDescription !== job.summary;
+
+    card.innerHTML =
+      '<div class="card-header">' +
+        logoHtml +
+        '<div><div class="title">[' + (i + 1) + '] ' + esc(job.title) + '</div>' +
+        '<div class="company">' + esc(job.company) + '</div></div>' +
+      '</div>' +
+      '<div class="badges">' +
+        '<span class="badge badge-loc">📍 ' + esc(job.location) + '</span>' +
+        salBadge +
+      '</div>' +
+      '<p class="summary">' + esc(job.summary) + (hasMore ? '…' : '') + '</p>' +
+      (hasMore ? '<p class="full-desc">' + esc(job.fullDescription) + '</p>' : '') +
+      '<div class="actions">' +
+        (hasMore ? '<button class="btn-toggle">Show full description ▼</button>' : '') +
+        '<button class="btn-apply" data-url="' + esc(job.applyUrl) + '">🎯 Help Me Apply</button>' +
+      '</div>';
+
+    if (hasMore) {
+      card.querySelector(".btn-toggle").addEventListener("click", function() {
+        const desc = card.querySelector(".full-desc");
+        const open = desc.classList.toggle("open");
+        this.textContent = open ? "Hide description ▲" : "Show full description ▼";
+      });
+    }
+
+    card.querySelector(".btn-apply").addEventListener("click", function() {
+      app.openLink({ url: this.dataset.url });
+    });
+
+    board.appendChild(card);
+  });
+};
+
+await app.connect();
+const ctx = app.getHostContext();
+if (ctx) {
+  document.documentElement.classList.toggle("dark", ctx.theme === "dark");
+  if (ctx.styles?.variables) applyHostStyleVariables(ctx.styles.variables);
+}
+
+function esc(s) {
+  return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function initEl(company) {
+  const d = document.createElement("div");
+  d.className = "logo-init";
+  d.textContent = (company || "?")[0].toUpperCase();
+  return d;
+}
+</script>
