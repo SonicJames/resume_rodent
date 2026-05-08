@@ -15,11 +15,14 @@
     --sal-fg: #86efac;
     --accent: #4f46e5;
     --accent-text: #818cf8;
+    --green: #22c55e;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, sans-serif; font-size: 14px; }
   body { padding: 12px 14px; }
   h1 { font-size: 15px; font-weight: 700; margin-bottom: 12px; color: var(--text); }
+
+  /* Job board */
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; }
   .card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
   .logo { width: 36px; height: 36px; border-radius: 5px; object-fit: contain; background: #fff; padding: 2px; flex-shrink: 0; }
@@ -36,13 +39,52 @@
   .actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
   .btn-toggle { background: transparent; border: 1px solid var(--accent); color: var(--accent-text); border-radius: 5px; padding: 4px 10px; font-size: 11px; cursor: pointer; }
   .btn-apply { background: var(--accent); color: #fff; border-radius: 5px; padding: 4px 12px; font-size: 11px; font-weight: 600; cursor: pointer; border: none; }
-  .back-bar { margin-bottom: 10px; }
-  .btn-back { background: transparent; border: 1px solid var(--border); color: var(--sub); border-radius: 5px; padding: 5px 12px; font-size: 12px; cursor: pointer; }
-  .apply-frame { width: 100%; height: 720px; border: none; border-radius: 8px; display: block; }
+
+  /* Apply view */
+  .back-bar { margin-bottom: 12px; }
+  .btn-back { background: transparent; border: 1px solid var(--border); color: var(--sub); border-radius: 5px; padding: 4px 10px; font-size: 11px; cursor: pointer; }
+  .apply-header { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
+  .apply-job-title { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+  .apply-job-meta { font-size: 12px; color: var(--sub); }
+  .section-label { font-size: 12px; color: var(--sub); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+  textarea { width: 100%; background: var(--card); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 10px; font-size: 13px; line-height: 1.5; resize: vertical; min-height: 160px; font-family: inherit; }
+  textarea:focus { outline: none; border-color: var(--accent); }
+  .btn-primary { background: var(--accent); color: #fff; border: none; border-radius: 6px; padding: 8px 18px; font-size: 13px; font-weight: 600; cursor: pointer; margin-top: 8px; }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Analysis result */
+  .result-box { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-top: 12px; }
+  .result-text { color: var(--body); font-size: 13px; line-height: 1.7; white-space: pre-wrap; }
+
+  /* Chat */
+  .chat-box { margin-top: 12px; }
+  .msg { border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; font-size: 13px; line-height: 1.6; white-space: pre-wrap; }
+  .msg-user { background: var(--accent); color: #fff; margin-left: 24px; }
+  .msg-assistant { background: var(--card); border: 1px solid var(--border); color: var(--body); margin-right: 24px; }
+  .chat-input-row { display: flex; gap: 6px; margin-top: 8px; }
+  .chat-input-row input { flex: 1; background: var(--card); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 7px 10px; font-size: 13px; font-family: inherit; }
+  .chat-input-row input:focus { outline: none; border-color: var(--accent); }
+  .btn-send { background: var(--accent); color: #fff; border: none; border-radius: 6px; padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .btn-send:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Footer */
+  .apply-footer { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); text-align: center; }
+  .ext-link { color: var(--accent-text); font-size: 12px; cursor: pointer; text-decoration: none; }
+  .ext-link:hover { text-decoration: underline; }
+  .status { color: var(--sub); font-size: 12px; margin-top: 8px; font-style: italic; }
+
   .superseded { opacity: 0.4; pointer-events: none; }
 </style>
+
 <h1 id="heading">🐭 Resume Rodent</h1>
-<div id="board"></div>
+<div id="board-view">
+  <div id="board"></div>
+</div>
+<div id="apply-view" style="display:none">
+  <div class="back-bar"><button class="btn-back" id="back-btn">← Back to jobs</button></div>
+  <div id="apply-content"></div>
+</div>
+
 <script type="module">
 /*__EXT_APPS_BUNDLE__*/
 const { App, applyHostStyleVariables } = globalThis.ExtApps;
@@ -66,11 +108,19 @@ app.onhostcontextchanged = (ctx) => {
 };
 
 let currentJobs = [];
+let applyConversation = [];
+let currentApplyJob = null;
+
+// ── Job board view ────────────────────────────────────────────────
 
 function renderJobs(jobs) {
-  const board = document.getElementById("board");
+  currentJobs = jobs;
+  document.getElementById("board-view").style.display = "";
+  document.getElementById("apply-view").style.display = "none";
   document.getElementById("heading").textContent =
     "🐭 Resume Rodent — " + jobs.length + " job" + (jobs.length !== 1 ? "s" : "") + " found";
+
+  const board = document.getElementById("board");
   board.innerHTML = "";
 
   jobs.forEach((job, i) => {
@@ -80,78 +130,190 @@ function renderJobs(jobs) {
     const logoHtml = job.logo
       ? '<img class="logo" src="' + esc(job.logo) + '" alt="" referrerpolicy="no-referrer" onerror="this.replaceWith(initEl(\'' + esc(job.company) + '\'))">'
       : initEl(job.company).outerHTML;
-
-    const salBadge = job.salary
-      ? '<span class="badge badge-sal">💰 ' + esc(job.salary) + '</span>'
-      : "";
-
+    const salBadge = job.salary ? '<span class="badge badge-sal">💰 ' + esc(job.salary) + '</span>' : "";
     const hasMore = job.fullDescription && job.fullDescription !== job.summary;
 
     card.innerHTML =
-      '<div class="card-header">' +
-        logoHtml +
+      '<div class="card-header">' + logoHtml +
         '<div><div class="title">[' + (i + 1) + '] ' + esc(job.title) + '</div>' +
         '<div class="company">' + esc(job.company) + '</div></div>' +
       '</div>' +
-      '<div class="badges">' +
-        '<span class="badge badge-loc">📍 ' + esc(job.location) + '</span>' +
-        salBadge +
-      '</div>' +
+      '<div class="badges"><span class="badge badge-loc">📍 ' + esc(job.location) + '</span>' + salBadge + '</div>' +
       '<p class="summary">' + esc(job.summary) + (hasMore ? '…' : '') + '</p>' +
       (hasMore ? '<p class="full-desc">' + esc(job.fullDescription) + '</p>' : '') +
       '<div class="actions">' +
         (hasMore ? '<button class="btn-toggle">Show full description ▼</button>' : '') +
-        '<button class="btn-apply" data-url="' + esc(job.applyUrl) + '" data-title="' + esc(job.title) + '">🎯 Help Me Apply</button>' +
+        '<button class="btn-apply">🎯 Help Me Apply</button>' +
       '</div>';
 
     if (hasMore) {
-      card.querySelector(".btn-toggle").addEventListener("click", function() {
+      card.querySelector(".btn-toggle").addEventListener("click", function () {
         const desc = card.querySelector(".full-desc");
         const open = desc.classList.toggle("open");
         this.textContent = open ? "Hide description ▲" : "Show full description ▼";
       });
     }
 
-    card.querySelector(".btn-apply").addEventListener("click", async function() {
-      await showApplyFrame(this.dataset.url, this.dataset.title);
-    });
-
+    card.querySelector(".btn-apply").addEventListener("click", () => openApplyView(job));
     board.appendChild(card);
   });
 }
 
-async function showApplyFrame(url, title) {
-  const ctx = app.getHostContext();
-  if (ctx?.availableDisplayModes?.includes("fullscreen")) {
-    await app.requestDisplayMode({ mode: "fullscreen" }).catch(() => {});
-  }
+// ── Apply view ────────────────────────────────────────────────────
 
-  const board = document.getElementById("board");
-  document.getElementById("heading").textContent = "🐭 Resume Rodent — Applying";
+function openApplyView(job) {
+  currentApplyJob = job;
+  applyConversation = [];
 
-  const backBar = document.createElement("div");
-  backBar.className = "back-bar";
-  backBar.innerHTML = '<button class="btn-back">← Back to jobs</button>';
-  backBar.querySelector(".btn-back").addEventListener("click", async () => {
-    if (ctx?.availableDisplayModes?.includes("fullscreen")) {
-      await app.requestDisplayMode({ mode: "inline" }).catch(() => {});
-    }
-    renderJobs(currentJobs);
+  document.getElementById("board-view").style.display = "none";
+  document.getElementById("apply-view").style.display = "";
+  document.getElementById("heading").textContent = "🐭 Resume Rodent — Apply";
+
+  const content = document.getElementById("apply-content");
+  content.innerHTML =
+    '<div class="apply-header">' +
+      '<div class="apply-job-title">' + esc(job.title) + '</div>' +
+      '<div class="apply-job-meta">' + esc(job.company) + (job.location ? ' · ' + esc(job.location) : '') + (job.salary ? ' · ' + esc(job.salary) : '') + '</div>' +
+    '</div>' +
+    '<div class="section-label">Your resume</div>' +
+    '<textarea id="resume-text" placeholder="Paste your resume text here…"></textarea>' +
+    '<button class="btn-primary" id="analyze-btn">🔍 Analyze My Resume</button>' +
+    '<div id="status" class="status"></div>' +
+    '<div id="result-area"></div>' +
+    '<div class="apply-footer">' +
+      '<a class="ext-link" id="full-app-link">Open full Resume Rodent app for tailored PDF →</a>' +
+    '</div>';
+
+  document.getElementById("analyze-btn").addEventListener("click", analyzeResume);
+  document.getElementById("full-app-link").addEventListener("click", () => {
+    app.openLink({ url: job.applyUrl });
   });
-
-  const frame = document.createElement("iframe");
-  frame.className = "apply-frame";
-  frame.src = url;
-  frame.setAttribute("sandbox", "allow-scripts allow-forms allow-same-origin allow-popups allow-downloads allow-popups-to-escape-sandbox");
-
-  board.innerHTML = "";
-  board.appendChild(backBar);
-  board.appendChild(frame);
 }
 
-app.ontoolresult = ({ content }) => {
-  currentJobs = JSON.parse(content[0].text);
+document.getElementById("back-btn").addEventListener("click", () => {
   renderJobs(currentJobs);
+});
+
+// ── Resume analysis ───────────────────────────────────────────────
+
+const SYSTEM_PROMPT =
+  "You are an expert resume coach at Resume Rodent. A candidate has shared their resume and a job they want to apply for. " +
+  "Provide specific, actionable feedback. Structure your response:\n" +
+  "**Match Score:** X/10 — one-sentence reason\n" +
+  "**Key Strengths:** 2-3 bullet points of what aligns well\n" +
+  "**Gaps to Address:** 2-3 specific things missing or weak\n" +
+  "**Quick Wins:** 1-2 concrete edits they can make right now\n\n" +
+  "Keep it under 350 words. Be honest but encouraging.";
+
+async function analyzeResume() {
+  const resumeText = document.getElementById("resume-text").value.trim();
+  if (!resumeText) {
+    setStatus("Please paste your resume text first.");
+    return;
+  }
+
+  const btn = document.getElementById("analyze-btn");
+  btn.disabled = true;
+  btn.textContent = "Analyzing…";
+  setStatus("Sending to Claude…");
+
+  const job = currentApplyJob;
+  const userText =
+    "Job Title: " + job.title + "\n" +
+    "Company: " + job.company + "\n" +
+    (job.location ? "Location: " + job.location + "\n" : "") +
+    "\nJob Description:\n" + job.fullDescription +
+    "\n\n---\n\nMy Resume:\n" + resumeText;
+
+  applyConversation = [{ role: "user", content: { type: "text", text: userText } }];
+
+  try {
+    const caps = app.getHostCapabilities();
+    if (!caps?.sampling) throw new Error("sampling not supported");
+
+    const result = await app.createSamplingMessage({
+      messages: applyConversation,
+      system: SYSTEM_PROMPT,
+      maxTokens: 700,
+    });
+
+    const text = result.content?.type === "text" ? result.content.text : "Analysis complete.";
+    applyConversation.push({ role: "assistant", content: { type: "text", text } });
+    showAnalysis(text);
+    setStatus("");
+  } catch (e) {
+    setStatus("Inline analysis unavailable — opening Resume Rodent in browser.");
+    await app.openLink({ url: job.applyUrl });
+  }
+
+  btn.disabled = false;
+  btn.textContent = "🔍 Re-analyze";
+}
+
+function showAnalysis(text) {
+  const area = document.getElementById("result-area");
+  area.innerHTML =
+    '<div class="result-box"><div class="result-text" id="analysis-text">' + escHtml(text) + '</div></div>' +
+    '<div class="chat-box" id="chat-box"></div>' +
+    '<div class="chat-input-row">' +
+      '<input id="chat-input" placeholder="Ask a follow-up question…">' +
+      '<button class="btn-send" id="send-btn">Send</button>' +
+    '</div>';
+
+  document.getElementById("send-btn").addEventListener("click", sendFollowUp);
+  document.getElementById("chat-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") sendFollowUp();
+  });
+}
+
+async function sendFollowUp() {
+  const input = document.getElementById("chat-input");
+  const text = input.value.trim();
+  if (!text) return;
+
+  const sendBtn = document.getElementById("send-btn");
+  input.value = "";
+  sendBtn.disabled = true;
+
+  appendChatMsg("user", text);
+  applyConversation.push({ role: "user", content: { type: "text", text } });
+
+  try {
+    const result = await app.createSamplingMessage({
+      messages: applyConversation,
+      system: SYSTEM_PROMPT + "\nYou are continuing a conversation. Keep follow-up responses concise.",
+      maxTokens: 400,
+    });
+    const reply = result.content?.type === "text" ? result.content.text : "";
+    applyConversation.push({ role: "assistant", content: { type: "text", text: reply } });
+    appendChatMsg("assistant", reply);
+  } catch (e) {
+    appendChatMsg("assistant", "Sorry, I couldn't process that. Please try again.");
+  }
+
+  sendBtn.disabled = false;
+  input.focus();
+}
+
+function appendChatMsg(role, text) {
+  const box = document.getElementById("chat-box");
+  const div = document.createElement("div");
+  div.className = "msg msg-" + role;
+  div.textContent = text;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+function setStatus(msg) {
+  const el = document.getElementById("status");
+  if (el) el.textContent = msg;
+}
+
+// ── Tool result handler ───────────────────────────────────────────
+
+app.ontoolresult = ({ content }) => {
+  const jobs = JSON.parse(content[0].text);
+  renderJobs(jobs);
 };
 
 await app.connect();
@@ -161,8 +323,13 @@ if (ctx) {
   if (ctx.styles?.variables) applyHostStyleVariables(ctx.styles.variables);
 }
 
+// ── Helpers ───────────────────────────────────────────────────────
+
 function esc(s) {
   return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function escHtml(s) {
+  return esc(s).replace(/\n/g, "<br>");
 }
 function initEl(company) {
   const d = document.createElement("div");
