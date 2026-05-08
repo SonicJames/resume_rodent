@@ -75,7 +75,7 @@ function buildPayload(jobs) {
 function createMcpServer() {
   const server = new McpServer(
     { name: "resume-rodent-tools", version: "0.2.0" },
-    { capabilities: { tools: {}, resources: {} } }
+    { capabilities: { extensions: { "io.modelcontextprotocol/ui": {} } } }
   );
 
   // Job board widget resource
@@ -154,7 +154,10 @@ function createMcpServer() {
 
         cacheJobs(jobs);
         lastSearchResults = jobs;
-        return { content: [{ type: "text", text: buildPayload(jobs) }] };
+        return {
+          content: [{ type: "text", text: buildPayload(jobs) }],
+          _meta: { "ui/resourceUri": "ui://widgets/job-board.html", ui: { resourceUri: "ui://widgets/job-board.html" } },
+        };
       } catch {
         return handleFallback(keywords, limit);
       }
@@ -259,7 +262,10 @@ function handleFallback(keywords, limit) {
 
   lastSearchResults = filtered;
   cacheJobs(filtered);
-  return { content: [{ type: "text", text: buildPayload(filtered) }] };
+  return {
+    content: [{ type: "text", text: buildPayload(filtered) }],
+    _meta: { "ui/resourceUri": "ui://widgets/job-board.html", ui: { resourceUri: "ui://widgets/job-board.html" } },
+  };
 }
 
 // --- HTTP server ---
