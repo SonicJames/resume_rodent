@@ -149,7 +149,7 @@ function createMcpServer() {
         {
           name: "find_me_a_job",
           description:
-            "Search for job opportunities from SonicJobs. Returns a link to a job board page showing all results with full descriptions and apply buttons. Always present the job board link prominently so the user can click it.",
+            "Search for job opportunities from SonicJobs. After calling this tool, respond with ONLY a React artifact — no chat text at all. The artifact is a dark interactive job board. Use the JSON array from the tool result as the JOBS constant. Each card: bold numbered title, company name, location pill (bg #0f3460 color #93c5fd), salary pill if present (bg #14532d color #86efac), summary paragraph, a button that toggles fullDescription inline using useState, and an anchor '🎯 Help Me Apply' opening applyUrl in a new tab. Body bg #0f0f1a, card bg #1a1a2e, card border #2d2d4e, body text #e2e8f0.",
           inputSchema: {
             type: "object",
             properties: {
@@ -278,15 +278,22 @@ async function handleFindMeAJob(args) {
     cacheJobs(jobs);
     lastSearchResults = jobs;
 
-    const boardUrl = storePageAndReturnUrl(jobs);
+    storePageAndReturnUrl(jobs);
+    const payload = jobs.map((j, i) => ({
+      n: i + 1,
+      title: j.title,
+      company: j.company,
+      location: j.location,
+      salary: j.salary || null,
+      logo: j.logo || null,
+      summary: j.summary,
+      fullDescription: j.fullDescription.slice(0, 800),
+      applyUrl: RESUME_RODENT_APP + "?job_id=" + encodeURIComponent(j.id)
+        + "&job_title=" + encodeURIComponent(j.title)
+        + "&job_url=" + encodeURIComponent(j.url)
+    }));
     return {
-      content: [{
-        type: "text",
-        text: "Found " + jobs.length + " jobs matching \"" + keywords + "\".\n\n"
-          + "Job board: " + boardUrl + "\n\n"
-          + "Jobs found:\n"
-          + jobs.map((j, i) => (i + 1) + ". " + j.title + " at " + j.company + (j.salary ? " — " + j.salary : "")).join("\n")
-      }]
+      content: [{ type: "text", text: JSON.stringify(payload) }]
     };
   } catch (error) {
     return handleFindMeAJobFallback(keywords, limit);
@@ -378,15 +385,22 @@ function handleFindMeAJobFallback(keywords, limit) {
   lastSearchResults = filtered;
   cacheJobs(filtered);
 
-  const boardUrl = storePageAndReturnUrl(filtered);
+  storePageAndReturnUrl(filtered);
+  const payload = filtered.map((j, i) => ({
+    n: i + 1,
+    title: j.title,
+    company: j.company,
+    location: j.location,
+    salary: j.salary || null,
+    logo: j.logo || null,
+    summary: j.summary,
+    fullDescription: j.fullDescription.slice(0, 800),
+    applyUrl: RESUME_RODENT_APP + "?job_id=" + encodeURIComponent(j.id)
+      + "&job_title=" + encodeURIComponent(j.title)
+      + "&job_url=" + encodeURIComponent(j.url)
+  }));
   return {
-    content: [{
-      type: "text",
-      text: "Found " + filtered.length + " sample job(s) matching \"" + keywords + "\".\n\n"
-        + "Job board: " + boardUrl + "\n\n"
-        + "Jobs found:\n"
-        + filtered.map((j, i) => (i + 1) + ". " + j.title + " at " + j.company + " — " + j.salary).join("\n")
-    }]
+    content: [{ type: "text", text: JSON.stringify(payload) }]
   };
 }
 
