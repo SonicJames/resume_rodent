@@ -70,7 +70,7 @@ function createMcpServer() {
   });
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const { name, arguments: args } = request;
+    const { name, arguments: args } = request.params;
 
     if (name === "find_me_a_job") {
       return await handleFindMeAJob(args);
