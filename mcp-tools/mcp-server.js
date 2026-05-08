@@ -47,7 +47,7 @@ function createMcpServer() {
         {
           name: "find_me_a_job",
           description:
-            "Search for job opportunities from SonicJobs. IMPORTANT: When displaying results, reproduce each job listing to the user exactly and in full — including job title, company, location, salary, and the full 'About the role' summary. Do not condense, paraphrase, or omit any fields. Show every job returned.",
+            "Search for job opportunities from SonicJobs. CRITICAL: After this tool returns, you MUST immediately create a React artifact (an interactive rendered component — NOT a code block in your text response). The artifact should render a dark-themed job board. For each job show: numbered title + company name, logo image if logo URL present, location and salary as small colored pill badges, the summary paragraph, an expand/collapse toggle button to reveal fullDescription inline, and an anchor tag '🎯 Help Me Apply' using the provided applyUrl. Use a single useState(null) to track which card index is open. Background #0f0f1a, card background #1a1a2e, border #2d2d4e, text #e2e8f0. Do not write any prose — just output the artifact.",
           inputSchema: {
             type: "object",
             properties: {
@@ -124,101 +124,19 @@ function createMcpServer() {
 // Ordered list of the last search so view_job_details can look up by number
 let lastSearchResults = [];
 
-function buildJobsReactArtifact(jobs, keywords) {
-  const jobsJson = JSON.stringify(jobs);
-  const appBase = JSON.stringify(RESUME_RODENT_APP);
-
-  return `
-Please render the following as a React artifact:
-
-\`\`\`jsx
-import { useState } from "react";
-
-const JOBS = ${jobsJson};
-const APP_BASE = ${appBase};
-
-function applyUrl(job) {
-  return APP_BASE + "?job_id=" + encodeURIComponent(job.id) + "&job_title=" + encodeURIComponent(job.title) + "&job_url=" + encodeURIComponent(job.url);
-}
-
-function JobCard({ job, num }) {
-  const [expanded, setExpanded] = useState(false);
-  return (
-    <div style={{
-      background: "#1a1a2e", border: "1px solid #2d2d4e", borderRadius: 12,
-      padding: "18px 20px", marginBottom: 16, fontFamily: "system-ui, sans-serif"
-    }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
-        {job.logo && (
-          <img src={job.logo} alt={job.company} style={{ width: 40, height: 40, borderRadius: 6, objectFit: "contain", background: "#fff", padding: 3 }} />
-        )}
-        <div>
-          <div style={{ color: "#e2e8f0", fontWeight: 700, fontSize: 15 }}>
-            [{num}] {job.title}
-          </div>
-          <div style={{ color: "#94a3b8", fontSize: 13 }}>{job.company}</div>
-        </div>
-      </div>
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
-        <span style={{ background: "#0f3460", color: "#93c5fd", borderRadius: 20, padding: "2px 10px", fontSize: 12 }}>
-          📍 {job.location}
-        </span>
-        {job.salary && (
-          <span style={{ background: "#14532d", color: "#86efac", borderRadius: 20, padding: "2px 10px", fontSize: 12 }}>
-            💰 {job.salary}
-          </span>
-        )}
-      </div>
-      <p style={{ color: "#cbd5e1", fontSize: 13, lineHeight: 1.6, margin: "0 0 10px" }}>
-        {job.summary}{!expanded && job.fullDescription.length > job.summary.length ? "…" : ""}
-      </p>
-      {expanded && (
-        <p style={{ color: "#94a3b8", fontSize: 12, lineHeight: 1.7, margin: "0 0 10px", borderTop: "1px solid #2d2d4e", paddingTop: 10 }}>
-          {job.fullDescription}
-        </p>
-      )}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {job.fullDescription.length > job.summary.length && (
-          <button
-            onClick={() => setExpanded(!expanded)}
-            style={{
-              background: "transparent", border: "1px solid #4f46e5", color: "#818cf8",
-              borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer"
-            }}
-          >
-            {expanded ? "Hide description ▲" : "Show full description ▼"}
-          </button>
-        )}
-        <a
-          href={applyUrl(job)}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            background: "#4f46e5", color: "#fff", borderRadius: 6,
-            padding: "5px 14px", fontSize: 12, textDecoration: "none", fontWeight: 600
-          }}
-        >
-          🎯 Help Me Apply
-        </a>
-      </div>
-    </div>
-  );
-}
-
-export default function App() {
-  return (
-    <div style={{ background: "#0f0f1a", minHeight: "100vh", padding: "24px 20px", boxSizing: "border-box" }}>
-      <div style={{ maxWidth: 680, margin: "0 auto" }}>
-        <h2 style={{ color: "#e2e8f0", fontFamily: "system-ui, sans-serif", marginBottom: 20, fontSize: 18 }}>
-          🐭 Resume Rodent — {JOBS.length} job{JOBS.length !== 1 ? "s" : ""} found
-        </h2>
-        {JOBS.map((job, i) => <JobCard key={job.id} job={job} num={i + 1} />)}
-      </div>
-    </div>
-  );
-}
-\`\`\`
-`.trim();
+function buildJobsPayload(jobs) {
+  const jobsWithUrls = jobs.map((j, i) => ({
+    num: i + 1,
+    title: j.title,
+    company: j.company,
+    location: j.location,
+    salary: j.salary || null,
+    logo: j.logo || null,
+    summary: j.summary,
+    fullDescription: j.fullDescription,
+    applyUrl: RESUME_RODENT_APP + "?job_id=" + encodeURIComponent(j.id) + "&job_title=" + encodeURIComponent(j.title) + "&job_url=" + encodeURIComponent(j.url)
+  }));
+  return JSON.stringify({ count: jobs.length, jobs: jobsWithUrls });
 }
 
 async function handleFindMeAJob(args) {
@@ -274,7 +192,7 @@ async function handleFindMeAJob(args) {
     lastSearchResults = jobs;
 
     return {
-      content: [{ type: "text", text: buildJobsReactArtifact(jobs, keywords) }]
+      content: [{ type: "text", text: buildJobsPayload(jobs) }]
     };
   } catch (error) {
     return handleFindMeAJobFallback(keywords, limit);
@@ -367,7 +285,7 @@ function handleFindMeAJobFallback(keywords, limit) {
   cacheJobs(filtered);
 
   return {
-    content: [{ type: "text", text: buildJobsReactArtifact(filtered, keywords) }]
+    content: [{ type: "text", text: buildJobsPayload(filtered) }]
   };
 }
 
