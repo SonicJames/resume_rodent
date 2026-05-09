@@ -11,12 +11,17 @@ import {
 import { z } from "zod";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { createHash, randomUUID } from "node:crypto";
 import dotenv from "dotenv";
 
 dotenv.config();
 
 const SONIC_JOBS_MCP_URL = process.env.SONICJOBS_MCP_URL || null;
 const RESUME_RODENT_APP = (process.env.RESUME_RODENT_APP_URL || "http://localhost:4000").trim();
+const MCP_SERVER_URL = (process.env.MCP_SERVER_URL || "https://resume-rodent-mcp-production.up.railway.app/mcp").trim();
+
+// Stable widget origin Claude.ai uses to sandbox the iframe (sha256 of server URL, first 32 hex chars)
+const APP_DOMAIN = createHash("sha256").update(MCP_SERVER_URL).digest("hex").slice(0, 32) + ".claudemcpcontent.com";
 
 // Inline the ext-apps browser bundle at startup (CSP blocks CDN imports in widget iframes)
 const require = createRequire(import.meta.url);
@@ -89,6 +94,7 @@ function createMcpServer() {
         uri: "ui://widgets/job-board.html",
         mimeType: RESOURCE_MIME_TYPE,
         text: widgetHtml,
+        _meta: { ui: { domain: APP_DOMAIN } },
       }],
     }),
   );
@@ -365,14 +371,43 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
+// Stateful sessions — Claude.ai needs a persistent session for widget rendering
+const sessions = new Map();
+
 app.all("/mcp", async (req, res) => {
-  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+  const sessionId = req.headers["mcp-session-id"];
+
+  if (sessionId && sessions.has(sessionId)) {
+    await sessions.get(sessionId).handleRequest(req, res, req.body);
+    return;
+  }
+
+  // New session
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: () => randomUUID(),
+  });
   const server = createMcpServer();
   await server.connect(transport);
+
+  transport.onclose = () => {
+    if (transport.sessionId) sessions.delete(transport.sessionId);
+  };
+
   await transport.handleRequest(req, res, req.body);
+
+  if (transport.sessionId) sessions.set(transport.sessionId, transport);
 });
 
-app.get("/health", (_req, res) => res.json({ status: "ok", service: "resume-rodent-mcp" }));
+app.delete("/mcp", async (req, res) => {
+  const sessionId = req.headers["mcp-session-id"];
+  if (sessionId && sessions.has(sessionId)) {
+    await sessions.get(sessionId).close();
+    sessions.delete(sessionId);
+  }
+  res.status(200).end();
+});
+
+app.get("/health", (_req, res) => res.json({ status: "ok", service: "resume-rodent-mcp", sessions: sessions.size }));
 
 const port = process.env.PORT || 3001;
 app.listen(port, () => {
