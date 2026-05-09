@@ -87,11 +87,11 @@ function createMcpServer() {
   registerAppResource(
     server,
     "Job Board",
-    "ui://widgets/job-board-v4.html",
+    "ui://widgets/job-board-v5.html",
     { domain: APP_DOMAIN },
     async () => ({
       contents: [{
-        uri: "ui://widgets/job-board-v4.html",
+        uri: "ui://widgets/job-board-v5.html",
         mimeType: RESOURCE_MIME_TYPE,
         text: widgetHtml,
         _meta: { ui: { domain: APP_DOMAIN } },
@@ -104,15 +104,15 @@ function createMcpServer() {
     server,
     "find_me_a_job",
     {
-      description: "Search for job opportunities from SonicJobs. Call this tool ONCE — it opens an interactive job board inline showing all results. Do not call it multiple times for the same request.",
+      description: "Search for jobs and display them in an interactive inline board. IMPORTANT: Call this tool EXACTLY ONCE per user request with the best keywords — never call it multiple times or in parallel. The widget shows all results together; multiple calls create broken duplicate boards.",
       annotations: { title: "Find Me a Job", readOnlyHint: true },
       inputSchema: {
-        keywords: z.string().describe("Job title, role or keywords (e.g. 'product manager', 'marketing')"),
-        limit: z.number().optional().describe("Max jobs to return (default 10)"),
+        keywords: z.string().describe("Job title, role or keywords — combine into one query (e.g. 'senior product manager remote')"),
       },
-      _meta: { ui: { resourceUri: "ui://widgets/job-board-v4.html" } },
+      _meta: { ui: { resourceUri: "ui://widgets/job-board-v5.html" } },
     },
-    async ({ keywords = "", limit = 10 }) => {
+    async ({ keywords = "" }) => {
+      const limit = 10;
       if (!SONIC_JOBS_MCP_URL) return handleFallback(keywords, limit);
       try {
         await fetch(SONIC_JOBS_MCP_URL, {
@@ -162,7 +162,7 @@ function createMcpServer() {
         lastSearchResults = jobs;
         return {
           content: [{ type: "text", text: buildPayload(jobs) }],
-          _meta: { "ui/resourceUri": "ui://widgets/job-board-v4.html", ui: { resourceUri: "ui://widgets/job-board-v4.html" } },
+          _meta: { "ui/resourceUri": "ui://widgets/job-board-v5.html", ui: { resourceUri: "ui://widgets/job-board-v5.html" } },
         };
       } catch {
         return handleFallback(keywords, limit);
@@ -244,7 +244,7 @@ function createMcpServer() {
       },
       _meta: {
         ui: {
-          resourceUri: "ui://widgets/job-board-v4.html",
+          resourceUri: "ui://widgets/job-board-v5.html",
           visibility: ["app"],
         },
       },
@@ -285,7 +285,7 @@ function createMcpServer() {
       },
       _meta: {
         ui: {
-          resourceUri: "ui://widgets/job-board-v4.html",
+          resourceUri: "ui://widgets/job-board-v5.html",
           visibility: ["app"],
         },
       },
@@ -325,7 +325,7 @@ function createMcpServer() {
       },
       _meta: {
         ui: {
-          resourceUri: "ui://widgets/job-board-v4.html",
+          resourceUri: "ui://widgets/job-board-v5.html",
           visibility: ["app"],
         },
       },
@@ -388,7 +388,7 @@ function handleFallback(keywords, limit) {
   cacheJobs(filtered);
   return {
     content: [{ type: "text", text: buildPayload(filtered) }],
-    _meta: { "ui/resourceUri": "ui://widgets/job-board-v4.html", ui: { resourceUri: "ui://widgets/job-board-v4.html" } },
+    _meta: { "ui/resourceUri": "ui://widgets/job-board-v5.html", ui: { resourceUri: "ui://widgets/job-board-v5.html" } },
   };
 }
 

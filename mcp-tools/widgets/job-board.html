@@ -3,18 +3,18 @@
 <meta name="color-scheme" content="dark" />
 <style>
   :root {
-    --bg: #0f0f1a;
-    --card: #1a1a2e;
-    --border: #2d2d4e;
-    --text: #e2e8f0;
-    --sub: #94a3b8;
-    --body: #cbd5e1;
-    --loc-bg: #0f3460;
-    --loc-fg: #93c5fd;
-    --sal-bg: #14532d;
-    --sal-fg: #86efac;
-    --accent: #4f46e5;
-    --accent-text: #818cf8;
+    --bg: #0d0d0d;
+    --card: #1a1a1a;
+    --border: #2a2a2a;
+    --text: #e8e8e8;
+    --sub: #808080;
+    --body: #b8b8b8;
+    --loc-bg: #222222;
+    --loc-fg: #909090;
+    --sal-bg: #152015;
+    --sal-fg: #5cba5c;
+    --accent: #3a3a3a;
+    --accent-text: #c8c8c8;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, sans-serif; font-size: 14px; }
@@ -37,7 +37,7 @@
   .full-desc.open { display: block; }
   .actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
   .btn-toggle { background: transparent; border: 1px solid var(--accent); color: var(--accent-text); border-radius: 5px; padding: 4px 10px; font-size: 11px; cursor: pointer; }
-  .btn-apply { background: var(--accent); color: #fff; border-radius: 5px; padding: 4px 12px; font-size: 11px; font-weight: 600; cursor: pointer; border: none; }
+  .btn-apply { background: #e8e8e8; color: #0d0d0d; border-radius: 5px; padding: 4px 12px; font-size: 11px; font-weight: 600; cursor: pointer; border: none; }
 
   /* Apply view */
   .back-bar { margin-bottom: 12px; }
@@ -48,18 +48,18 @@
   .section-label { font-size: 12px; color: var(--sub); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
   textarea { width: 100%; background: var(--card); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 10px; font-size: 13px; line-height: 1.5; resize: vertical; min-height: 150px; font-family: inherit; }
   textarea:focus { outline: none; border-color: var(--accent); }
-  .btn-primary { background: var(--accent); color: #fff; border: none; border-radius: 6px; padding: 8px 18px; font-size: 13px; font-weight: 600; cursor: pointer; margin-top: 8px; display: block; }
+  .btn-primary { background: #e8e8e8; color: #0d0d0d; border: none; border-radius: 6px; padding: 8px 18px; font-size: 13px; font-weight: 600; cursor: pointer; margin-top: 8px; display: block; }
   .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
   .status { color: var(--sub); font-size: 12px; margin-top: 8px; min-height: 18px; }
   .result-box { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-top: 12px; }
   .result-text { color: var(--body); font-size: 13px; line-height: 1.7; white-space: pre-wrap; }
   .msg { border-radius: 8px; padding: 10px 12px; margin-top: 8px; font-size: 13px; line-height: 1.6; white-space: pre-wrap; }
-  .msg-user { background: var(--accent); color: #fff; margin-left: 24px; }
+  .msg-user { background: #3a3a3a; color: #e8e8e8; margin-left: 24px; }
   .msg-assistant { background: var(--card); border: 1px solid var(--border); color: var(--body); margin-right: 24px; }
   .chat-input-row { display: flex; gap: 6px; margin-top: 10px; }
   .chat-input-row input { flex: 1; background: var(--card); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 7px 10px; font-size: 13px; font-family: inherit; }
   .chat-input-row input:focus { outline: none; border-color: var(--accent); }
-  .btn-send { background: var(--accent); color: #fff; border: none; border-radius: 6px; padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .btn-send { background: #e8e8e8; color: #0d0d0d; border: none; border-radius: 6px; padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
   .btn-send:disabled { opacity: 0.5; }
   .upload-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
   .btn-upload { background: transparent; border: 1px solid var(--border); color: var(--sub); border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer; white-space: nowrap; }
