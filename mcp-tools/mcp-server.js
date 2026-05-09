@@ -11,17 +11,15 @@ import {
 import { z } from "zod";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import dotenv from "dotenv";
 
 dotenv.config();
 
 const SONIC_JOBS_MCP_URL = process.env.SONICJOBS_MCP_URL || null;
 const RESUME_RODENT_APP = (process.env.RESUME_RODENT_APP_URL || "http://localhost:4000").trim();
-const MCP_SERVER_URL = (process.env.MCP_SERVER_URL || "https://resume-rodent-mcp-production.up.railway.app/mcp").trim();
-
-// Stable widget origin Claude.ai uses to sandbox the iframe (sha256 of server URL, first 32 hex chars)
-const APP_DOMAIN = createHash("sha256").update(MCP_SERVER_URL).digest("hex").slice(0, 32) + ".claudemcpcontent.com";
+// Stable widget origin required by Claude.ai — sha256("https://resume-rodent-mcp-production.up.railway.app/mcp").slice(0,32) + ".claudemcpcontent.com"
+const APP_DOMAIN = "4c6e427b436038ba6fd4f2f127e141eb.claudemcpcontent.com";
 
 // Inline the ext-apps browser bundle at startup (CSP blocks CDN imports in widget iframes)
 const require = createRequire(import.meta.url);
