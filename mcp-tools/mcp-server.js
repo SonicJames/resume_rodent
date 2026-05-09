@@ -11,7 +11,6 @@ import {
 import { z } from "zod";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { randomUUID } from "node:crypto";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -407,48 +406,16 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
-// Stateful sessions — Claude.ai needs a persistent session for widget rendering
-const sessions = new Map();
-
 app.all("/mcp", async (req, res) => {
-  const sessionId = req.headers["mcp-session-id"];
-
-  if (sessionId && sessions.has(sessionId)) {
-    await sessions.get(sessionId).handleRequest(req, res, req.body);
-    return;
-  }
-
-  // Stale session ID (server restarted) — tell client to re-initialize
-  if (sessionId && !sessions.has(sessionId)) {
-    return res.status(404).json({ error: "Session not found — please reconnect" });
-  }
-
-  // New session
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: () => randomUUID(),
-  });
+  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
   const server = createMcpServer();
   await server.connect(transport);
-
-  transport.onclose = () => {
-    if (transport.sessionId) sessions.delete(transport.sessionId);
-  };
-
   await transport.handleRequest(req, res, req.body);
-
-  if (transport.sessionId) sessions.set(transport.sessionId, transport);
 });
 
-app.delete("/mcp", async (req, res) => {
-  const sessionId = req.headers["mcp-session-id"];
-  if (sessionId && sessions.has(sessionId)) {
-    await sessions.get(sessionId).close();
-    sessions.delete(sessionId);
-  }
-  res.status(200).end();
-});
+app.delete("/mcp", (_req, res) => res.status(200).end());
 
-app.get("/health", (_req, res) => res.json({ status: "ok", service: "resume-rodent-mcp", sessions: sessions.size }));
+app.get("/health", (_req, res) => res.json({ status: "ok", service: "resume-rodent-mcp" }));
 
 // Favicon — shows Resume Rodent icon in Claude.ai connector list instead of Railway logo
 app.get("/favicon.ico", (_req, res) => {
