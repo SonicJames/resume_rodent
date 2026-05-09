@@ -107,7 +107,7 @@ function createMcpServer() {
       description: "Search for jobs and display results in an interactive inline board. Pass ALL desired roles and variations in the keywords array in a single call — the tool handles multiple terms internally. Never call this tool more than once per user request.",
       annotations: { title: "Find Me a Job", readOnlyHint: true },
       inputSchema: {
-        keywords: z.array(z.string()).describe("All job titles, roles or search terms the user wants — e.g. ['product manager', 'senior PM', 'remote'] — combined into one search. Include everything here instead of calling the tool multiple times."),
+        keywords: z.union([z.array(z.string()), z.string()]).describe("Job title, role or keywords. Pass an array to include multiple terms in one call rather than calling the tool multiple times — e.g. ['product manager', 'senior PM', 'remote']."),
       },
       _meta: { ui: { resourceUri: "ui://widgets/job-board-v5.html" } },
     },
