@@ -81,15 +81,15 @@ function createMcpServer() {
     { capabilities: { extensions: { "io.modelcontextprotocol/ui": {} } } }
   );
 
-  // Job board widget resource
+  // Job board widget resource — URI versioned to bust Claude.ai resource cache
   registerAppResource(
     server,
     "Job Board",
-    "ui://widgets/job-board.html",
-    {},
+    "ui://widgets/job-board-v3.html",
+    { domain: APP_DOMAIN },
     async () => ({
       contents: [{
-        uri: "ui://widgets/job-board.html",
+        uri: "ui://widgets/job-board-v3.html",
         mimeType: RESOURCE_MIME_TYPE,
         text: widgetHtml,
         _meta: { ui: { domain: APP_DOMAIN } },
@@ -108,7 +108,7 @@ function createMcpServer() {
         keywords: z.string().describe("Job title, role or keywords (e.g. 'product manager', 'marketing')"),
         limit: z.number().optional().describe("Max jobs to return (default 10)"),
       },
-      _meta: { ui: { resourceUri: "ui://widgets/job-board.html" } },
+      _meta: { ui: { resourceUri: "ui://widgets/job-board-v3.html" } },
     },
     async ({ keywords = "", limit = 10 }) => {
       if (!SONIC_JOBS_MCP_URL) return handleFallback(keywords, limit);
@@ -160,7 +160,7 @@ function createMcpServer() {
         lastSearchResults = jobs;
         return {
           content: [{ type: "text", text: buildPayload(jobs) }],
-          _meta: { "ui/resourceUri": "ui://widgets/job-board.html", ui: { resourceUri: "ui://widgets/job-board.html" } },
+          _meta: { "ui/resourceUri": "ui://widgets/job-board-v3.html", ui: { resourceUri: "ui://widgets/job-board-v3.html" } },
         };
       } catch {
         return handleFallback(keywords, limit);
@@ -242,7 +242,7 @@ function createMcpServer() {
       },
       _meta: {
         ui: {
-          resourceUri: "ui://widgets/job-board.html",
+          resourceUri: "ui://widgets/job-board-v3.html",
           visibility: ["app"],
         },
       },
@@ -283,7 +283,7 @@ function createMcpServer() {
       },
       _meta: {
         ui: {
-          resourceUri: "ui://widgets/job-board.html",
+          resourceUri: "ui://widgets/job-board-v3.html",
           visibility: ["app"],
         },
       },
@@ -351,7 +351,7 @@ function handleFallback(keywords, limit) {
   cacheJobs(filtered);
   return {
     content: [{ type: "text", text: buildPayload(filtered) }],
-    _meta: { "ui/resourceUri": "ui://widgets/job-board.html", ui: { resourceUri: "ui://widgets/job-board.html" } },
+    _meta: { "ui/resourceUri": "ui://widgets/job-board-v3.html", ui: { resourceUri: "ui://widgets/job-board-v3.html" } },
   };
 }
 
