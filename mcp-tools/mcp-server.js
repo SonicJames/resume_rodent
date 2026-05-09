@@ -104,16 +104,17 @@ function createMcpServer() {
     server,
     "find_me_a_job",
     {
-      description: "Search for jobs and display them in an interactive inline board. IMPORTANT: Call this tool EXACTLY ONCE per user request with the best keywords — never call it multiple times or in parallel. The widget shows all results together; multiple calls create broken duplicate boards.",
+      description: "Search for jobs and display results in an interactive inline board. Pass ALL desired roles and variations in the keywords array in a single call — the tool handles multiple terms internally. Never call this tool more than once per user request.",
       annotations: { title: "Find Me a Job", readOnlyHint: true },
       inputSchema: {
-        keywords: z.string().describe("Job title, role or keywords — combine into one query (e.g. 'senior product manager remote')"),
+        keywords: z.array(z.string()).describe("All job titles, roles or search terms the user wants — e.g. ['product manager', 'senior PM', 'remote'] — combined into one search. Include everything here instead of calling the tool multiple times."),
       },
       _meta: { ui: { resourceUri: "ui://widgets/job-board-v5.html" } },
     },
-    async ({ keywords = "" }) => {
-      const limit = 10;
-      if (!SONIC_JOBS_MCP_URL) return handleFallback(keywords, limit);
+    async ({ keywords = [] }) => {
+      const query = Array.isArray(keywords) ? keywords.join(" ") : String(keywords);
+      const limit = 15;
+      if (!SONIC_JOBS_MCP_URL) return handleFallback(query, limit);
       try {
         await fetch(SONIC_JOBS_MCP_URL, {
           method: "POST",
@@ -129,21 +130,21 @@ function createMcpServer() {
             jsonrpc: "2.0",
             id: Date.now(),
             method: "tools/call",
-            params: { name: "job-search", arguments: { role: [keywords], page: 1 } },
+            params: { name: "job-search", arguments: { role: [query], page: 1 } },
           }),
           signal: AbortSignal.timeout(25000),
         });
 
         const text = await response.text();
         const dataMatch = text.match(/^data:\s*(.+)$/m);
-        if (!dataMatch) return handleFallback(keywords, limit);
+        if (!dataMatch) return handleFallback(query, limit);
 
         const parsed = JSON.parse(dataMatch[1]);
-        if (parsed.error) return handleFallback(keywords, limit);
+        if (parsed.error) return handleFallback(query, limit);
 
         const rawJobs = (parsed.result?._meta?.jobs || []).slice(0, limit);
         if (rawJobs.length === 0) {
-          return { content: [{ type: "text", text: `No jobs found matching "${keywords}". Try different keywords.` }] };
+          return { content: [{ type: "text", text: `No jobs found matching "${query}". Try different keywords.` }] };
         }
 
         const jobs = rawJobs.map((job) => ({
@@ -165,7 +166,7 @@ function createMcpServer() {
           _meta: { "ui/resourceUri": "ui://widgets/job-board-v5.html", ui: { resourceUri: "ui://widgets/job-board-v5.html" } },
         };
       } catch {
-        return handleFallback(keywords, limit);
+        return handleFallback(query, limit);
       }
     },
   );
@@ -350,7 +351,7 @@ function createMcpServer() {
   return server;
 }
 
-function handleFallback(keywords, limit) {
+function handleFallback(query, limit) {
   const sampleJobs = [
     {
       id: "job-1", title: "Senior Product Marketing Manager", company: "Northstar AI",
