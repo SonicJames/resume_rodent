@@ -85,11 +85,11 @@ function createMcpServer() {
   registerAppResource(
     server,
     "Job Board",
-    "ui://widgets/job-board-v3.html",
+    "ui://widgets/job-board-v4.html",
     { domain: APP_DOMAIN },
     async () => ({
       contents: [{
-        uri: "ui://widgets/job-board-v3.html",
+        uri: "ui://widgets/job-board-v4.html",
         mimeType: RESOURCE_MIME_TYPE,
         text: widgetHtml,
         _meta: { ui: { domain: APP_DOMAIN } },
@@ -102,13 +102,13 @@ function createMcpServer() {
     server,
     "find_me_a_job",
     {
-      description: "Search for job opportunities from SonicJobs. Opens an interactive job board inline showing all results with salary, summary, expand/collapse descriptions and Help Me Apply buttons.",
+      description: "Search for job opportunities from SonicJobs. Call this tool ONCE — it opens an interactive job board inline showing all results. Do not call it multiple times for the same request.",
       annotations: { title: "Find Me a Job", readOnlyHint: true },
       inputSchema: {
         keywords: z.string().describe("Job title, role or keywords (e.g. 'product manager', 'marketing')"),
         limit: z.number().optional().describe("Max jobs to return (default 10)"),
       },
-      _meta: { ui: { resourceUri: "ui://widgets/job-board-v3.html" } },
+      _meta: { ui: { resourceUri: "ui://widgets/job-board-v4.html" } },
     },
     async ({ keywords = "", limit = 10 }) => {
       if (!SONIC_JOBS_MCP_URL) return handleFallback(keywords, limit);
@@ -160,7 +160,7 @@ function createMcpServer() {
         lastSearchResults = jobs;
         return {
           content: [{ type: "text", text: buildPayload(jobs) }],
-          _meta: { "ui/resourceUri": "ui://widgets/job-board-v3.html", ui: { resourceUri: "ui://widgets/job-board-v3.html" } },
+          _meta: { "ui/resourceUri": "ui://widgets/job-board-v4.html", ui: { resourceUri: "ui://widgets/job-board-v4.html" } },
         };
       } catch {
         return handleFallback(keywords, limit);
@@ -242,7 +242,7 @@ function createMcpServer() {
       },
       _meta: {
         ui: {
-          resourceUri: "ui://widgets/job-board-v3.html",
+          resourceUri: "ui://widgets/job-board-v4.html",
           visibility: ["app"],
         },
       },
@@ -283,7 +283,7 @@ function createMcpServer() {
       },
       _meta: {
         ui: {
-          resourceUri: "ui://widgets/job-board-v3.html",
+          resourceUri: "ui://widgets/job-board-v4.html",
           visibility: ["app"],
         },
       },
@@ -306,6 +306,41 @@ function createMcpServer() {
         return { content: [{ type: "text", text: data.assistant || "" }] };
       } catch (err) {
         return { content: [{ type: "text", text: "Chat failed: " + err.message }], isError: true };
+      }
+    },
+  );
+
+  // extract_resume_text — parse uploaded PDF/DOCX/TXT; called by widget, hidden from Claude
+  registerAppTool(
+    server,
+    "extract_resume_text",
+    {
+      description: "Extract plain text from an uploaded resume file (PDF, DOCX, TXT). Called by the job board widget.",
+      annotations: { title: "Extract Resume Text", readOnlyHint: true },
+      inputSchema: {
+        fileBase64: z.string().describe("Base64-encoded file content"),
+        fileName: z.string().describe("Original filename including extension"),
+      },
+      _meta: {
+        ui: {
+          resourceUri: "ui://widgets/job-board-v4.html",
+          visibility: ["app"],
+        },
+      },
+    },
+    async ({ fileBase64, fileName }) => {
+      try {
+        const response = await fetch(RESUME_RODENT_APP + "/api/extract-resume", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fileBase64, fileName }),
+          signal: AbortSignal.timeout(15000),
+        });
+        if (!response.ok) throw new Error("extract api " + response.status);
+        const data = await response.json();
+        return { content: [{ type: "text", text: data.text || "" }] };
+      } catch (err) {
+        return { content: [{ type: "text", text: "Extraction failed: " + err.message }], isError: true };
       }
     },
   );
@@ -351,7 +386,7 @@ function handleFallback(keywords, limit) {
   cacheJobs(filtered);
   return {
     content: [{ type: "text", text: buildPayload(filtered) }],
-    _meta: { "ui/resourceUri": "ui://widgets/job-board-v3.html", ui: { resourceUri: "ui://widgets/job-board-v3.html" } },
+    _meta: { "ui/resourceUri": "ui://widgets/job-board-v4.html", ui: { resourceUri: "ui://widgets/job-board-v4.html" } },
   };
 }
 
@@ -406,6 +441,13 @@ app.delete("/mcp", async (req, res) => {
 });
 
 app.get("/health", (_req, res) => res.json({ status: "ok", service: "resume-rodent-mcp", sessions: sessions.size }));
+
+// Favicon — shows Resume Rodent icon in Claude.ai connector list instead of Railway logo
+app.get("/favicon.ico", (_req, res) => {
+  res.setHeader("Content-Type", "image/svg+xml");
+  res.setHeader("Cache-Control", "public, max-age=86400");
+  res.send('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🐭</text></svg>');
+});
 
 const port = process.env.PORT || 3001;
 app.listen(port, () => {

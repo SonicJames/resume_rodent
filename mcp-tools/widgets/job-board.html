@@ -1,6 +1,6 @@
 <!doctype html>
 <meta charset="utf-8" />
-<meta name="color-scheme" content="light dark" />
+<meta name="color-scheme" content="dark" />
 <style>
   :root {
     --bg: #0f0f1a;
@@ -61,6 +61,10 @@
   .chat-input-row input:focus { outline: none; border-color: var(--accent); }
   .btn-send { background: var(--accent); color: #fff; border: none; border-radius: 6px; padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
   .btn-send:disabled { opacity: 0.5; }
+  .upload-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .btn-upload { background: transparent; border: 1px solid var(--border); color: var(--sub); border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+  .btn-upload:hover { border-color: var(--accent); color: var(--accent-text); }
+  .upload-hint { color: var(--sub); font-size: 11px; }
   .apply-footer { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); text-align: center; }
   .ext-link { color: var(--accent-text); font-size: 12px; cursor: pointer; }
   .ext-link:hover { text-decoration: underline; }
@@ -76,7 +80,7 @@
 
 <script type="module">
 /*__EXT_APPS_BUNDLE__*/
-const { App, applyHostStyleVariables } = globalThis.ExtApps;
+const { App } = globalThis.ExtApps;
 
 const seq = Date.now() + Math.random();
 const bc = new BroadcastChannel("rr-job-board");
@@ -87,9 +91,8 @@ bc.postMessage({ seq });
 
 const app = new App({ name: "JobBoard", version: "1.0.0" }, {}, { autoResize: true });
 
-app.onhostcontextchanged = (ctx) => {
-  document.documentElement.classList.toggle("dark", ctx?.theme === "dark");
-  if (ctx?.styles?.variables) applyHostStyleVariables(ctx.styles.variables);
+app.onhostcontextchanged = (_ctx) => {
+  // Always dark — don't let host theme override our palette
 };
 
 let currentJobs = [];
@@ -158,6 +161,11 @@ function openApplyView(job) {
     `<div class="apply-job-meta">${esc(job.company)}${job.location ? " · " + esc(job.location) : ""}${job.salary ? " · " + esc(job.salary) : ""}</div>` +
     `</div>` +
     `<div class="section-label">Your resume</div>` +
+    `<div class="upload-row">` +
+    `<label class="btn-upload" for="resume-file">📎 Upload file</label>` +
+    `<input type="file" id="resume-file" accept=".txt,.pdf,.docx" style="display:none">` +
+    `<span class="upload-hint" id="upload-hint">.txt · .pdf · .docx — or paste below</span>` +
+    `</div>` +
     `<textarea id="resume-text" placeholder="Paste your resume text here…"></textarea>` +
     `<button class="btn-primary" id="analyze-btn">🔍 Analyze My Resume</button>` +
     `<div class="status" id="status"></div>` +
@@ -168,9 +176,49 @@ function openApplyView(job) {
 
   document.getElementById("analyze-btn").addEventListener("click", analyzeResume);
   document.getElementById("open-app-link").addEventListener("click", () => app.openLink({ url: job.applyUrl }));
+  document.getElementById("resume-file").addEventListener("change", handleFileUpload);
 }
 
 document.getElementById("back-btn").addEventListener("click", () => renderJobs(currentJobs));
+
+// ── File upload ───────────────────────────────────────────────────
+
+async function handleFileUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const hint = document.getElementById("upload-hint");
+  hint.textContent = "Reading " + file.name + "…";
+  setStatus("Extracting text from file…");
+
+  try {
+    const buffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    let binary = "";
+    const chunk = 8192;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+    }
+    const fileBase64 = btoa(binary);
+
+    const result = await app.callServerTool({
+      name: "extract_resume_text",
+      arguments: { fileBase64, fileName: file.name },
+    });
+
+    const text = result.content?.[0]?.text || "";
+    if (result.isError) throw new Error(text);
+
+    document.getElementById("resume-text").value = text;
+    hint.textContent = file.name + " loaded";
+    setStatus("");
+  } catch (err) {
+    hint.textContent = ".txt · .pdf · .docx — or paste below";
+    setStatus("Upload error: " + err.message);
+  }
+
+  e.target.value = "";
+}
 
 // ── Analysis via callServerTool → Railway → Vercel API ───────────
 
@@ -281,11 +329,6 @@ app.ontoolresult = ({ content }) => {
 };
 
 await app.connect();
-const ctx = app.getHostContext();
-if (ctx) {
-  document.documentElement.classList.toggle("dark", ctx.theme === "dark");
-  if (ctx.styles?.variables) applyHostStyleVariables(ctx.styles.variables);
-}
 
 // ── Helpers ───────────────────────────────────────────────────────
 
