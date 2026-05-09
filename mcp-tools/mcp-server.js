@@ -418,6 +418,11 @@ app.all("/mcp", async (req, res) => {
     return;
   }
 
+  // Stale session ID (server restarted) — tell client to re-initialize
+  if (sessionId && !sessions.has(sessionId)) {
+    return res.status(404).json({ error: "Session not found — please reconnect" });
+  }
+
   // New session
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: () => randomUUID(),
