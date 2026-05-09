@@ -18,6 +18,8 @@ dotenv.config();
 
 const SONIC_JOBS_MCP_URL = process.env.SONICJOBS_MCP_URL || null;
 const RESUME_RODENT_APP = (process.env.RESUME_RODENT_APP_URL || "http://localhost:4000").trim();
+// API base uses origin only — env var may include a path like /app which breaks /api/* routes
+const RESUME_RODENT_API = (() => { try { return new URL(RESUME_RODENT_APP).origin; } catch { return RESUME_RODENT_APP; } })();
 // Stable widget origin required by Claude.ai — sha256("https://resume-rodent-mcp-production.up.railway.app/mcp").slice(0,32) + ".claudemcpcontent.com"
 const APP_DOMAIN = "4c6e427b436038ba6fd4f2f127e141eb.claudemcpcontent.com";
 
@@ -249,7 +251,7 @@ function createMcpServer() {
     },
     async ({ jobTitle, jobDescription, jobUrl, resumeText }) => {
       try {
-        const response = await fetch(RESUME_RODENT_APP + "/api/exchange", {
+        const response = await fetch(RESUME_RODENT_API + "/api/exchange", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -290,7 +292,7 @@ function createMcpServer() {
     },
     async ({ jobUrl, jobDescription, resumeText, conversation }) => {
       try {
-        const response = await fetch(RESUME_RODENT_APP + "/api/chat", {
+        const response = await fetch(RESUME_RODENT_API + "/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -330,7 +332,7 @@ function createMcpServer() {
     },
     async ({ fileBase64, fileName }) => {
       try {
-        const response = await fetch(RESUME_RODENT_APP + "/api/extract-resume", {
+        const response = await fetch(RESUME_RODENT_API + "/api/extract-resume", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ fileBase64, fileName }),
